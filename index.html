@@ -68,9 +68,9 @@ hr.top {
 .chart-area {
   display: flex;
   align-items: flex-end;
-  gap: var(--gap);
+  gap: 1.2vw; /* reduce from 4vw to make bars closer */
   height: 62vh;
-  padding: 20px 0;
+  padding: 10px 0; /* less padding vertically */
   position: relative;
 }
 
@@ -100,12 +100,12 @@ hr.top {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0 2%; /* reduce side padding to make bars take more width */
+  padding: 0; /* remove side padding entirely */
 }
 
 .bar-inner {
-  width: 85%; /* slightly thicker */
-  border-radius: 2px; /* slightly less rounded */
+  width: 90%; /* fill more of each slot */
+  border-radius: 2px;
   min-height: 15vh;
   display: flex;
   align-items: center;
@@ -114,7 +114,6 @@ hr.top {
   box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.15);
   position: relative;
 }
-
 
 
 .score-label {
