@@ -100,13 +100,13 @@ hr.top {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0 4%;
+  padding: 0 2%; /* reduce side padding to make bars take more width */
 }
 
 .bar-inner {
-  width: 150%;
-  border-radius: 10px; /* was 30 */
-  min-height: 15vh; /* was 10 */
+  width: 80%; /* was 100%; this centers bars but makes each one visually thicker relative to gap */
+  border-radius: 10px; /* less rounded */
+  min-height: 15vh; /* thicker base */
   display: flex;
   align-items: center;
   justify-content: center;
