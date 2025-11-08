@@ -10,7 +10,7 @@
 <style>
 @font-face {
   font-family: 'AvallonCaps';
-  src: url('https://fonts.cdnfonts.com/s/17726/Avallon%20All%20Caps.woff') format('woff');
+  src: url('https://cdn.jsdelivr.net/gh/NBaker9262/ALA-house-leaderboard/Avallon%20All%20Caps.ttf') format('truetype');
   font-display: swap;
 }
 
@@ -53,10 +53,10 @@ h1 {
 }
 
 .logo {
-  width: 110px;
+  width: 130px;
   height: auto;
-  filter: brightness(0) saturate(100%) invert(1); /* hides white background look */
-  mix-blend-mode: multiply;
+  object-fit: contain;
+  display: block;
 }
 
 hr.top {
@@ -105,8 +105,8 @@ hr.top {
 
 .bar-inner {
   width: 100%;
-  border-radius: 30px;
-  min-height: 10vh;
+  border-radius: 10px; /* was 30 */
+  min-height: 15vh; /* was 10 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -114,6 +114,7 @@ hr.top {
   box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.15);
   position: relative;
 }
+
 
 .score-label {
   font-size: clamp(28px, 3.8vw, 52px);
@@ -158,7 +159,7 @@ hr.top {
 <div class="wrap">
   <header>
     <h1>House Points<br>Leaderboard</h1>
-    <img class="logo" id="teamLogo" src="https://raw.githubusercontent.com/NBaker9262/Noah-ALA-File-Hosting/refs/heads/main/ALABear.jpg" alt="logo">
+    <img class="logo" id="teamLogo" src="https://raw.githubusercontent.com/NBaker9262/Noah-ALA-File-Hosting/refs/heads/main/ALA%20Bear%20No%20BG.png" alt="logo">
   </header>
 
   <hr class="top">
