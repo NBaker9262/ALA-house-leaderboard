@@ -68,9 +68,9 @@ hr.top {
 .chart-area {
   display: flex;
   align-items: flex-end;
-  gap: var(--gap);
+  gap: 0.5vw; /* almost no space between bars */
   height: 62vh;
-  padding: 20px 0;
+  padding: 5px 0; /* minimal padding */
   position: relative;
 }
 
@@ -100,12 +100,12 @@ hr.top {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0 2%; /* reduce side padding to make bars take more width */
+  padding: 0; /* no inner spacing */
 }
 
 .bar-inner {
-  width: 85%; /* slightly thicker */
-  border-radius: 2px; /* slightly less rounded */
+  width: 95%; /* bars fill most of each column */
+  border-radius: 1px; /* sharp edges */
   min-height: 15vh;
   display: flex;
   align-items: center;
