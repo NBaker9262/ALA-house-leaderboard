@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>House Points Leaderboard</title>
 
-<!-- Google Font fallback (replace with Avallon Caps .ttf hosted on your GitHub for exact match) -->
-
 <style>
 @font-face {
   font-family: 'AvallonCaps';
@@ -17,7 +15,7 @@
 :root {
   --bg: #c4a484;
   --grid: rgba(0, 0, 0, 0.08);
-  --gap: 4vw;
+  --gap: 2.4vw; /* midpoint spacing */
   --max-points: 600;
 }
 
@@ -70,7 +68,7 @@ hr.top {
   align-items: flex-end;
   gap: var(--gap);
   height: 62vh;
-  padding: 20px 0;
+  padding: 15px 0;
   position: relative;
 }
 
@@ -100,12 +98,11 @@ hr.top {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0 2%; /* reduce side padding to make bars take more width */
 }
 
 .bar-inner {
-  width: 85%; /* slightly thicker */
-  border-radius: 2px; /* slightly less rounded */
+  width: 87%; /* midpoint between 90% and 85% */
+  border-radius: 1.5px; /* slightly less rounded */
   min-height: 15vh;
   display: flex;
   align-items: center;
@@ -114,8 +111,6 @@ hr.top {
   box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.15);
   position: relative;
 }
-
-
 
 .score-label {
   font-size: clamp(28px, 3.8vw, 52px);
@@ -126,33 +121,18 @@ hr.top {
   pointer-events: none;
 }
 
-/* house colors and text contrast */
-.red {
-  background: #d90b1e;
-  color: #fff;
-}
-.white {
-  background: #ffffff;
-  color: #000;
-}
-.blue {
-  background: #122b56;
-  color: #fff;
-}
-.silver {
-  background: #d8dbe0;
-  color: #000;
-}
+/* house colors */
+.red { background: #d90b1e; color: #fff; }
+.white { background: #ffffff; color: #000; }
+.blue { background: #122b56; color: #fff; }
+.silver { background: #d8dbe0; color: #000; }
 
-/* default bar starting height */
-.bar-inner {
-  height: 15vh;
-}
+.bar-inner { height: 15vh; }
 
 @media(min-width: 1000px) {
   h1 { font-size: 80px; }
   .logo { width: 140px; }
-  .bar-inner { border-radius: 36px; }
+  .bar-inner { border-radius: 28px; }
 }
 </style>
 </head>
@@ -173,54 +153,33 @@ hr.top {
       <div class="line l3"></div>
     </div>
 
-    <!-- each bar container -->
-    <div class="bar">
-      <div class="bar-inner red" id="bar-red"><div class="score-label" id="score-red">0</div></div>
-    </div>
-    <div class="bar">
-      <div class="bar-inner white" id="bar-white"><div class="score-label" id="score-white">0</div></div>
-    </div>
-    <div class="bar">
-      <div class="bar-inner blue" id="bar-blue"><div class="score-label" id="score-blue">0</div></div>
-    </div>
-    <div class="bar">
-      <div class="bar-inner silver" id="bar-silver"><div class="score-label" id="score-silver">0</div></div>
-    </div>
+    <div class="bar"><div class="bar-inner red" id="bar-red"><div class="score-label" id="score-red">0</div></div></div>
+    <div class="bar"><div class="bar-inner white" id="bar-white"><div class="score-label" id="score-white">0</div></div></div>
+    <div class="bar"><div class="bar-inner blue" id="bar-blue"><div class="score-label" id="score-blue">0</div></div></div>
+    <div class="bar"><div class="bar-inner silver" id="bar-silver"><div class="score-label" id="score-silver">0</div></div></div>
   </div>
 </div>
 
-<!-- confetti library -->
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-<!-- Firebase (v9 modular) -->
 <script type="module">
-  // ====== FIREBASE SETUP ======
-  // 1) Create a Firebase project, enable Firestore (in Native mode).
-  // 2) Replace the firebaseConfig object below with your project's credentials.
-  // 3) Deploy these files to GitHub Pages and add your config to the control page too.
-
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
   const firebaseConfig = {
-     apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
+    apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
     authDomain: "ala-house-leaderboard.firebaseapp.com",
     projectId: "ala-house-leaderboard",
     storageBucket: "ala-house-leaderboard.firebasestorage.app",
     messagingSenderId: "827317744881",
     appId: "1:827317744881:web:c8518ba6523610ab006550",
     measurementId: "G-W47XZ87CQE"
-
   };
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Document schema: collection "leaderboard", doc "scores"
-  // { red: number, white: number, blue: number, silver: number, lastAction: {house,delta,timestamp} }
-
   const scoresDoc = doc(db, "leaderboard", "scores");
 
-  // UI elements
   const maxPoints = Number(getComputedStyle(document.documentElement).getPropertyValue('--max-points')) || 600;
   const bars = {
     red: document.getElementById('bar-red'),
@@ -235,13 +194,12 @@ hr.top {
     silver: document.getElementById('score-silver'),
   };
 
-  function setBarHeight(el, value){
-    // value proportion of maxPoints => height css percent
+  function setBarHeight(el, value) {
     const pct = Math.min(100, (value / maxPoints) * 100);
-    el.style.height = (8 + pct * 0.9) + 'vh'; // base + scaled to make smallest visible
+    el.style.height = (8 + pct * 0.9) + 'vh';
   }
 
-  function updateUI(payload){
+  function updateUI(payload) {
     const r = payload.red ?? 0;
     const w = payload.white ?? 0;
     const b = payload.blue ?? 0;
@@ -258,25 +216,18 @@ hr.top {
     setBarHeight(bars.silver, s);
   }
 
-  // Listen for live updates
   onSnapshot(scoresDoc, (snap) => {
-    if(!snap.exists()){
-      // initialize if missing (safe default)
-      // Do nothing here; control page will initialize
-      return;
-    }
+    if (!snap.exists()) return;
     const data = snap.data();
     updateUI(data);
 
-    // If lastAction contains confettiTrigger flag, fire confetti then clear flag (control handles it)
-    if(data._confetti && data._confetti.house){
+    if (data._confetti && data._confetti.house) {
       const colorMap = { red:'#d90b1e', white:'#ffffff', blue:'#122b56', silver:'#d8dbe0' };
-      const confettiColor = colorMap[data._confetti.house] || '#ffffff';
       confetti({
         particleCount: 120,
         spread: 70,
         origin: { y: 0.4 },
-        colors: [confettiColor]
+        colors: [colorMap[data._confetti.house] || '#ffffff']
       });
     }
   });
