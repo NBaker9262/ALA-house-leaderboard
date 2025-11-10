@@ -225,15 +225,17 @@ hr.top {
   const colorMap = { red:'#d90b1e', white:'#ffffff', blue:'#122b56', silver:'#d8dbe0' };
   const color = colorMap[data._confetti.house] || '#ffffff';
 
+  // Main center burst
   confetti({
-    particleCount: 100,
-    spread: 65,
+    particleCount: 80,
+    spread: 60,
     startVelocity: 35,
     origin: { y: 0.6 },
     colors: [color],
     scalar: 1.1,
   });
 
+  // Follow-up burst
   setTimeout(() => {
     confetti({
       particleCount: 60,
@@ -243,7 +245,27 @@ hr.top {
       colors: [color],
       scalar: 1.1,
     });
-  }, 500);
+  }, 400);
+
+  // Left corner burst
+  confetti({
+    particleCount: 40,
+    angle: 60,
+    spread: 55,
+    origin: { x: 0, y: 0.8 },
+    colors: [color],
+    scalar: 1.0,
+  });
+
+  // Right corner burst
+  confetti({
+    particleCount: 40,
+    angle: 120,
+    spread: 55,
+    origin: { x: 1, y: 0.8 },
+    colors: [color],
+    scalar: 1.0,
+  });
 }
   });
 </script>
