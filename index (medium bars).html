@@ -222,14 +222,25 @@ hr.top {
     updateUI(data);
 
     if (data._confetti && data._confetti.house) {
-      const colorMap = { red:'#d90b1e', white:'#ffffff', blue:'#122b56', silver:'#d8dbe0' };
-      confetti({
-        particleCount: 120,
-        spread: 70,
-        origin: { y: 0.4 },
-        colors: [colorMap[data._confetti.house] || '#ffffff']
-      });
-    }
+  const colorMap = { red:'#d90b1e', white:'#ffffff', blue:'#122b56', silver:'#d8dbe0' };
+  const color = colorMap[data._confetti.house] || '#ffffff';
+
+  // Heavier burst
+  const duration = 3000;
+  const end = Date.now() + duration;
+
+  (function frame() {
+    confetti({
+      particleCount: 180,
+      spread: 80,
+      startVelocity: 45,
+      origin: { y: 0.6 },
+      colors: [color],
+      scalar: 1.2,
+    });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  })();
+}
   });
 </script>
 </body>
