@@ -51,7 +51,7 @@ h1 {
 /* CHART AREA */
 .chart-area {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-around;
   height: 65vh;
   position: relative;
@@ -82,17 +82,16 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
+  position: static; /* Remove relative positioning to allow normal flow */
 }
 
-
-/* ANIMAL ICON ABOVE EACH BAR */
 .house-icon {
+  position: static; /* Remove absolute positioning */
   width: 120px;
   height: auto;
-  margin-bottom: 10px;
-  position: static; /* remove absolute positioning */
+  margin-bottom: 10px; /* Space between icon and bar */
+  transition: transform 0.6s cubic-bezier(.2,.9,.2,1);
 }
-
 
 /* BAR STYLE */
 .bar-inner {
