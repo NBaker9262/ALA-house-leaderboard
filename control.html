@@ -6,11 +6,11 @@
 <title>Control - House Points</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font-family:Inter,Arial, sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
-  .wrap{max-width:980px;margin:0 auto;}
+  body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
+  .wrap{max-width:980px;margin:0 auto;display:none;}
   h2{margin:0 0 8px 0}
-  .houses{display:flex;gap:12px;margin:16px 0;}
-  .card{flex:1;background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  .houses{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;}
+  .card{flex:1 1 45%;background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
   .house-name{font-weight:700;margin-bottom:8px}
   .points{font-size:28px;font-weight:700;margin-bottom:8px}
   .controls{display:flex;gap:8px;flex-wrap:wrap}
@@ -22,16 +22,28 @@
   .row{display:flex;gap:8px;margin-top:10px;align-items:center}
   input[type="number"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
   .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
+  .login input{padding:10px;border:1px solid #ccc;border-radius:6px;}
+  .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer}
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- LOGIN -->
+<div class="login" id="loginBox">
+  <h3>Enter Admin Access</h3>
+  <input type="text" id="user" placeholder="Username">
+  <input type="password" id="pass" placeholder="Password">
+  <button id="loginBtn">Login</button>
+  <div id="loginMsg" class="muted"></div>
+</div>
+
+<!-- MAIN CONTROL -->
+<div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
   <div class="muted">Use this panel to add/remove points, undo last action, or reset all scores.</div>
 
-  <div class="houses" id="housesContainer">
-    <!-- generated via JS -->
-  </div>
+  <div class="houses" id="housesContainer"></div>
 
   <div class="meta">
     <button id="undoBtn" class="small">Undo Last</button>
@@ -40,14 +52,31 @@
   </div>
 </div>
 
-<!-- confetti lib -->
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, updateDoc, runTransaction, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-  // ====== FIREBASE CONFIGURE ======
+  // === LOGIN SYSTEM ===
+  const LOGIN_USER = "admin";   // change to your chosen username
+  const LOGIN_PASS = "leader2025"; // change to a secure password
+
+  const loginBox = document.getElementById('loginBox');
+  const mainPanel = document.getElementById('mainPanel');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginMsg = document.getElementById('loginMsg');
+
+  loginBtn.addEventListener('click', ()=>{
+    const u = document.getElementById('user').value.trim();
+    const p = document.getElementById('pass').value.trim();
+    if(u===LOGIN_USER && p===LOGIN_PASS){
+      loginBox.style.display='none';
+      mainPanel.style.display='block';
+    } else {
+      loginMsg.textContent = "Invalid credentials.";
+    }
+  });
+
+  // === FIREBASE ===
   const firebaseConfig = {
     apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
     authDomain: "ala-house-leaderboard.firebaseapp.com",
@@ -56,18 +85,16 @@
     messagingSenderId: "827317744881",
     appId: "1:827317744881:web:c8518ba6523610ab006550",
     measurementId: "G-W47XZ87CQE"
-
   };
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const scoresDoc = doc(db, "leaderboard", "scores");
 
-  // houses & UI
   const houses = [
-    {id:'red', name:'Red House', color:'#d90b1e'},
-    {id:'white', name:'White House', color:'#ffffff'},
-    {id:'blue', name:'Blue House', color:'#122b56'},
-    {id:'silver', name:'Silver House', color:'#d8dbe0'}
+    {id:'red', name:'Red House', color:'#d90b1e', text:'#fff'},
+    {id:'white', name:'White House', color:'#ffffff', text:'#000'},
+    {id:'blue', name:'Blue House', color:'#122b56', text:'#fff'},
+    {id:'silver', name:'Silver House', color:'#d8dbe0', text:'#000'}
   ];
 
   const container = document.getElementById('housesContainer');
@@ -75,12 +102,11 @@
   const undoBtn = document.getElementById('undoBtn');
   const resetBtn = document.getElementById('resetBtn');
 
-  // create UI cards
   houses.forEach(h=>{
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
-      <div class="house-name" style="color:${h.color};">${h.name}</div>
+      <div class="house-name" style="color:${h.text};background:${h.color};padding:3px 6px;border-radius:4px;">${h.name}</div>
       <div class="points" id="pts-${h.id}">0</div>
       <div class="controls">
         <button class="small" data-house="${h.id}" data-val="5">+5</button>
@@ -96,17 +122,15 @@
     `;
     container.appendChild(card);
 
-    // add event listeners
     card.querySelectorAll('button.small').forEach(btn=>{
       btn.addEventListener('click', ()=> applyChange(h.id, Number(btn.dataset.val)));
     });
     card.querySelector(`#apply-${h.id}`).addEventListener('click', ()=>{
       const v = Number(card.querySelector(`#custom-${h.id}`).value || 0);
-      if(v !== 0) applyChange(h.id, v);
+      if(v!==0) applyChange(h.id, v);
     });
   });
 
-  // Initialize the doc if missing
   async function initIfMissing(){
     const snap = await getDoc(scoresDoc);
     if(!snap.exists()){
@@ -119,7 +143,6 @@
   }
   initIfMissing();
 
-  // Listen for updates to display current points and last action text
   onSnapshot(scoresDoc, (snap)=>{
     if(!snap.exists()) return;
     const data = snap.data();
@@ -128,45 +151,30 @@
       el.textContent = data[h.id] ?? 0;
     });
     if(data.lastAction){
-      lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.() || data.lastAction.timestamp || Date.now()).toLocaleTimeString()}`;
+      lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.() || Date.now()).toLocaleTimeString()}`;
     } else lastActionText.textContent = '';
   });
 
-  // Apply change with transaction (atomic)
   async function applyChange(house, delta){
     try{
       await runTransaction(db, async (t)=>{
         const snap = await t.get(scoresDoc);
-        if(!snap.exists()){
-          t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
-        }
+        if(!snap.exists()) t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
         const cur = snap.data();
         const newVal = (cur[house] || 0) + delta;
         t.update(scoresDoc, {
           [house]: newVal,
           lastAction: { house, delta, timestamp: serverTimestamp() },
-          _confetti: { house } // trigger confetti on display
+          _confetti: { house }  // triggers confetti on display only
         });
       });
-      // After success: clear the confetti trigger flag a short time later so display only fires once
-      setTimeout(()=> {
-        setDoc(scoresDoc, { _confetti: null }, { merge: true });
-      }, 1200);
-      // no local confetti here (display will show it), but play a small UI feedback
-      // optional: small confetti in control for admin
-      confetti({
-        particleCount: 30,
-        spread: 50,
-        origin: { y: 0.4 },
-        colors: [houses.find(h=>h.id===house).color || '#fff']
-      });
+      setTimeout(()=> setDoc(scoresDoc, { _confetti: null }, { merge: true }), 1200);
     }catch(err){
       console.error('Transaction failed:', err);
       alert('Failed to apply change. Check console for details.');
     }
   }
 
-  // Undo last action: subtract lastAction.delta from that house and clear lastAction
   undoBtn.addEventListener('click', async ()=>{
     try{
       await runTransaction(db, async (t)=>{
@@ -184,21 +192,15 @@
           _confetti: null
         });
       });
-    }catch(e){
-      alert(typeof e === 'string' ? e : 'Undo failed');
-    }
+    }catch(e){ alert(typeof e==='string'?e:'Undo failed'); }
   });
 
-  // Reset all to zero (confirm)
   resetBtn.addEventListener('click', async ()=>{
     if(!confirm('Reset all points to 0? This cannot be undone.')) return;
     try{
       await setDoc(scoresDoc, { red:0, white:0, blue:0, silver:0, lastAction:null, _confetti:null });
-    }catch(e){
-      alert('Reset failed');
-    }
+    }catch(e){ alert('Reset failed'); }
   });
-
 </script>
 </body>
 </html>
