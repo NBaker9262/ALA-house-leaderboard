@@ -58,8 +58,7 @@
 
   // === LOGIN SYSTEM ===
   const LOGIN_USER = "admin";   // change to your chosen username
-  const LOGIN_PASS = PASSWORD_CONTROL_HTML; // change to a secure password
-
+  
   const loginBox = document.getElementById('loginBox');
   const mainPanel = document.getElementById('mainPanel');
   const loginBtn = document.getElementById('loginBtn');
@@ -68,7 +67,7 @@
   loginBtn.addEventListener('click', ()=>{
     const u = document.getElementById('user').value.trim();
     const p = document.getElementById('pass').value.trim();
-    if(u===LOGIN_USER && p===LOGIN_PASS){
+    if(u===LOGIN_USER && p===PASSWORD_CONTROL_HTML){
       loginBox.style.display='none';
       mainPanel.style.display='block';
     } else {
