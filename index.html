@@ -82,18 +82,17 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  position: relative;
 }
+
 
 /* ANIMAL ICON ABOVE EACH BAR */
 .house-icon {
   width: 120px;
   height: auto;
-  object-fit: contain;
-  position: absolute;
-  bottom: calc(100% + 5px);
-  transition: bottom 0.9s cubic-bezier(.2,.9,.2,1);
+  margin-bottom: 10px;
+  position: static; /* remove absolute positioning */
 }
+
 
 /* BAR STYLE */
 .bar-inner {
