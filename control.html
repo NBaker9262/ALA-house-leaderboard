@@ -20,12 +20,13 @@
   .danger{background:#e74c3c;color:#fff}
   .muted{color:#666;font-size:13px}
   .row{display:flex;gap:8px;margin-top:10px;align-items:center}
-  input[type="number"], input[type="text"], input[type="email"], input[type="tel"], input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
+  input[type="number"], input[type="email"], input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
   .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
   .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
   .login input{padding:10px;border:1px solid #ccc;border-radius:6px;width:200px;}
   .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer;width:220px;}
   .login h3{margin-bottom:5px;}
+  #loggedInAs{margin-left:12px;font-weight:600;}
 </style>
 </head>
 <body>
@@ -36,6 +37,7 @@
   <input type="email" id="email" placeholder="Email">
   <input type="password" id="password" placeholder="Password">
   <button id="emailPassBtn">Sign in with Email/Password</button>
+  <div id="loginMsg" class="muted"></div>
 </div>
 
 <!-- MAIN CONTROL -->
@@ -49,188 +51,166 @@
     <button id="undoBtn" class="small">Undo Last</button>
     <button id="resetBtn" class="danger">Reset All</button>
     <div class="muted" id="lastActionText"></div>
+    <span id="loggedInAs" class="muted"></span>
     <button id="signOutBtn" class="small">Sign Out</button>
   </div>
 </div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { 
-    getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp 
-  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-  import { 
-    getAuth, signInWithEmailAndPassword, sendSignInLinkToEmail,
-    isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged,
-    RecaptchaVerifier, signInWithPhoneNumber, signOut
-  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-  // === FIREBASE ===
-  const firebaseConfig = {
-    apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
-    authDomain: "ala-house-leaderboard.firebaseapp.com",
-    projectId: "ala-house-leaderboard",
-    storageBucket: "ala-house-leaderboard.firebasestorage.app",
-    messagingSenderId: "827317744881",
-    appId: "1:827317744881:web:c8518ba6523610ab006550",
-    measurementId: "G-W47XZ87CQE"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const scoresDoc = doc(db, "leaderboard", "scores");
-  const auth = getAuth(app);
+// === FIREBASE CONFIG ===
+const firebaseConfig = {
+  apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
+  authDomain: "ala-house-leaderboard.firebaseapp.com",
+  projectId: "ala-house-leaderboard",
+  storageBucket: "ala-house-leaderboard.firebasestorage.app",
+  messagingSenderId: "827317744881",
+  appId: "1:827317744881:web:c8518ba6523610ab006550",
+  measurementId: "G-W47XZ87CQE"
+};
 
-  const loginBox = document.getElementById('loginBox');
-  const mainPanel = document.getElementById('mainPanel');
-  const loginMsg = document.getElementById('loginMsg');
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const scoresDoc = doc(db, "leaderboard", "scores");
+const auth = getAuth(app);
 
-  // === HOUSE POINTS UI ===
-  const houses = [
-    {id:'red', name:'Red House', color:'#d90b1e', text:'#fff'},
-    {id:'white', name:'White House', color:'#ffffff', text:'#000'},
-    {id:'blue', name:'Blue House', color:'#122b56', text:'#fff'},
-    {id:'silver', name:'Silver House', color:'#d8dbe0', text:'#000'}
-  ];
+// === UI ELEMENTS ===
+const loginBox = document.getElementById('loginBox');
+const mainPanel = document.getElementById('mainPanel');
+const loginMsg = document.getElementById('loginMsg');
+const undoBtn = document.getElementById('undoBtn');
+const resetBtn = document.getElementById('resetBtn');
+const signOutBtn = document.getElementById('signOutBtn');
+const loggedInAs = document.getElementById('loggedInAs');
 
-  const container = document.getElementById('housesContainer');
-  const lastActionText = document.getElementById('lastActionText');
-  const undoBtn = document.getElementById('undoBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const signOutBtn = document.getElementById('signOutBtn');
+const email = document.getElementById('email');
+const password = document.getElementById('password');
+const emailPassBtn = document.getElementById('emailPassBtn');
 
-  const bars = {}; // not needed here, main leaderboard handles visuals
-  const labels = {}; 
-  const icons = {}; 
+const houses = [
+  {id:'red', name:'Red House', color:'#d90b1e', text:'#fff'},
+  {id:'white', name:'White House', color:'#ffffff', text:'#000'},
+  {id:'blue', name:'Blue House', color:'#122b56', text:'#fff'},
+  {id:'silver', name:'Silver House', color:'#d8dbe0', text:'#000'}
+];
 
-  houses.forEach(h=>{
-    const card = document.createElement('div');
-    card.className='card';
-    card.innerHTML = `
-      <div class="house-name" style="color:${h.text};background:${h.color};padding:3px 6px;border-radius:4px;">${h.name}</div>
-      <div class="points" id="pts-${h.id}">0</div>
-      <div class="controls">
-        <button class="small" data-house="${h.id}" data-val="5">+5</button>
-        <button class="small" data-house="${h.id}" data-val="10">+10</button>
-        <button class="small" data-house="${h.id}" data-val="20">+20</button>
-        <button class="small" data-house="${h.id}" data-val="-5">-5</button>
-        <button class="small" data-house="${h.id}" data-val="-10">-10</button>
-      </div>
-      <div class="row">
-        <input type="number" placeholder="Custom +/-" id="custom-${h.id}">
-        <button class="add" id="apply-${h.id}">Apply</button>
-      </div>
-    `;
-    container.appendChild(card);
-    card.querySelectorAll('button.small').forEach(btn=>{
-      btn.addEventListener('click', ()=> applyChange(h.id, Number(btn.dataset.val)));
-    });
-    card.querySelector(`#apply-${h.id}`).addEventListener('click', ()=>{
-      const v = Number(card.querySelector(`#custom-${h.id}`).value || 0);
-      if(v!==0) applyChange(h.id, v);
-    });
+const container = document.getElementById('housesContainer');
+const lastActionText = document.getElementById('lastActionText');
+
+// === BUILD HOUSE CARDS ===
+houses.forEach(h=>{
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `
+    <div class="house-name" style="color:${h.text};background:${h.color};padding:3px 6px;border-radius:4px;">${h.name}</div>
+    <div class="points" id="pts-${h.id}">0</div>
+    <div class="controls">
+      <button class="small" data-house="${h.id}" data-val="5">+5</button>
+      <button class="small" data-house="${h.id}" data-val="10">+10</button>
+      <button class="small" data-house="${h.id}" data-val="20">+20</button>
+      <button class="small" data-house="${h.id}" data-val="-5">-5</button>
+      <button class="small" data-house="${h.id}" data-val="-10">-10</button>
+    </div>
+    <div class="row">
+      <input type="number" placeholder="Custom +/-" id="custom-${h.id}">
+      <button class="add" id="apply-${h.id}">Apply</button>
+    </div>
+  `;
+  container.appendChild(card);
+
+  card.querySelectorAll('button.small').forEach(btn=> btn.addEventListener('click', ()=> applyChange(h.id, Number(btn.dataset.val))));
+  card.querySelector(`#apply-${h.id}`).addEventListener('click', ()=>{
+    const v = Number(card.querySelector(`#custom-${h.id}`).value || 0);
+    if(v!==0) applyChange(h.id, v);
   });
+});
 
-  async function initIfMissing(){
-    const snap = await getDoc(scoresDoc);
-    if(!snap.exists()){
-      await setDoc(scoresDoc, {
-        red:0, white:0, blue:0, silver:0,
-        lastAction:null,
-        _confetti:null
-      });
-    }
+// === INIT SCORES IF MISSING ===
+async function initIfMissing(){
+  const snap = await getDoc(scoresDoc);
+  if(!snap.exists()){
+    await setDoc(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
   }
-  initIfMissing();
+}
+initIfMissing();
 
-  onSnapshot(scoresDoc, (snap)=>{
-    if(!snap.exists()) return;
-    const data = snap.data();
-    houses.forEach(h=>{
-      const el = document.getElementById('pts-'+h.id);
-      el.textContent = data[h.id] ?? 0;
+// === FIRESTORE REALTIME UPDATE ===
+onSnapshot(scoresDoc, (snap)=>{
+  if(!snap.exists()) return;
+  const data = snap.data();
+  houses.forEach(h=> document.getElementById('pts-'+h.id).textContent = data[h.id] ?? 0);
+  if(data.lastAction){
+    lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.()||Date.now()).toLocaleTimeString()}`;
+  } else lastActionText.textContent = '';
+});
+
+// === POINT CHANGES ===
+async function applyChange(house, delta){
+  try{
+    await runTransaction(db, async (t)=>{
+      const snap = await t.get(scoresDoc);
+      if(!snap.exists()) t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
+      const cur = snap.data();
+      const newVal = (cur[house] || 0) + delta;
+      t.update(scoresDoc, {[house]: newVal,lastAction:{house,delta,timestamp:serverTimestamp()},_confetti:{house}});
     });
-    if(data.lastAction){
-      lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.() || Date.now()).toLocaleTimeString()}`;
-    } else lastActionText.textContent = '';
-  });
+    setTimeout(()=> setDoc(scoresDoc, {_confetti:null},{merge:true}),1200);
+  }catch(e){console.error(e); alert('Failed to apply change.');}
+}
 
-  async function applyChange(house, delta){
-    try{
-      await runTransaction(db, async (t)=>{
-        const snap = await t.get(scoresDoc);
-        if(!snap.exists()) t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
-        const cur = snap.data();
-        const newVal = (cur[house] || 0) + delta;
-        t.update(scoresDoc, {
-          [house]: newVal,
-          lastAction: { house, delta, timestamp: serverTimestamp() },
-          _confetti: { house }
-        });
-      });
-      setTimeout(()=> setDoc(scoresDoc, { _confetti: null }, { merge: true }), 1200);
-    }catch(err){
-      console.error('Transaction failed:', err);
-      alert('Failed to apply change.');
-    }
-  }
+// === UNDO / RESET ===
+undoBtn.addEventListener('click', async ()=>{
+  try{
+    await runTransaction(db, async (t)=>{
+      const snap = await t.get(scoresDoc);
+      if(!snap.exists()) throw "No scores doc";
+      const data = snap.data();
+      const la = data.lastAction;
+      if(!la) throw "No last action to undo";
+      t.update(scoresDoc,{[la.house]:(data[la.house]||0)-la.delta,lastAction:null,_confetti:null});
+    });
+  }catch(e){ alert(typeof e==='string'?e:'Undo failed'); }
+});
 
-  undoBtn.addEventListener('click', async ()=>{
-    try{
-      await runTransaction(db, async (t)=>{
-        const snap = await t.get(scoresDoc);
-        if(!snap.exists()) throw "No scores doc";
-        const data = snap.data();
-        const la = data.lastAction;
-        if(!la) throw "No last action to undo";
-        const house = la.house;
-        const delta = la.delta || 0;
-        const newVal = (data[house] || 0) - delta;
-        t.update(scoresDoc, {
-          [house]: newVal,
-          lastAction: null,
-          _confetti: null
-        });
-      });
-    }catch(e){ alert(typeof e==='string'?e:'Undo failed'); }
-  });
+resetBtn.addEventListener('click', async ()=>{
+  if(!confirm('Reset all points to 0? This cannot be undone.')) return;
+  try{ await setDoc(scoresDoc,{red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null}); }
+  catch(e){ alert('Reset failed'); }
+});
 
-  resetBtn.addEventListener('click', async ()=>{
-    if(!confirm('Reset all points to 0? This cannot be undone.')) return;
-    try{
-      await setDoc(scoresDoc, { red:0, white:0, blue:0, silver:0, lastAction:null, _confetti:null });
-    }catch(e){ alert('Reset failed'); }
-  });
+// === SIGN OUT BUTTON ===
+signOutBtn.addEventListener('click', async ()=>{ await signOut(auth); });
 
-  signOutBtn.addEventListener('click', async ()=>{ await signOut(auth); });
+// === EMAIL/PASS SIGN-IN ===
+emailPassBtn.addEventListener('click', async ()=>{
+  try{
+    await signInWithEmailAndPassword(auth,email.value,password.value);
+  }catch(e){ loginMsg.textContent = e.message; }
+});
 
-  // === AUTH ===
-  const email = document.getElementById('email');
-  const password = document.getElementById('password');
-
-  const emailPassBtn = document.getElementById('emailPassBtn');
-
-  emailPassBtn.addEventListener('click', async ()=>{
-    try{
-      await signInWithEmailAndPassword(auth,email.value,password.value);
-    }catch(e){ loginMsg.textContent = e.message; }
-  });
-  
-  onAuthStateChanged(auth, async (user)=>{
-    if(user){
-      const token = await user.getIdTokenResult();
-      if(token.claims.admin){
-        loginBox.style.display='none';
-        mainPanel.style.display='block';
-      }else{
-        loginBox.style.display='block';
-        mainPanel.style.display='none';
-        loginMsg.textContent = "You are not an admin.";
-        await signOut(auth);
-      }
-    } else {
+// === AUTH STATE MANAGEMENT ===
+onAuthStateChanged(auth, async (user)=>{
+  if(user){
+    const token = await user.getIdTokenResult();
+    if(token.claims.admin){
+      loginBox.style.display='none';
+      mainPanel.style.display='block';
+      loggedInAs.textContent = `Logged in as: ${user.email}`;
+    }else{
       loginBox.style.display='block';
       mainPanel.style.display='none';
+      loginMsg.textContent = "You are not an admin.";
+      await signOut(auth);
     }
-  });
+  } else {
+    loginBox.style.display='flex';
+    mainPanel.style.display='none';
+    loggedInAs.textContent = '';
+  }
+});
 </script>
 </body>
 </html>
