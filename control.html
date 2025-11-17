@@ -22,6 +22,7 @@
   .row{display:flex;gap:8px;margin-top:10px;align-items:center}
   input[type="number"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
   .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
   .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
   .login input{padding:10px;border:1px solid #ccc;border-radius:6px;}
   .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer}
@@ -31,8 +32,8 @@
 
 <!-- LOGIN -->
 <div class="login" id="loginBox">
-  <h3>Enter Admin Access</h3>
-  <input type="text" id="user" placeholder="Username">
+  <h3>Admin Login</h3>
+  <input type="email" id="email" placeholder="Email">
   <input type="password" id="pass" placeholder="Password">
   <button id="loginBtn">Login</button>
   <div id="loginMsg" class="muted"></div>
@@ -42,6 +43,8 @@
 <div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
   <div class="muted">Use this panel to add/remove points, undo last action, or reset all scores.</div>
+
+  <button id="logoutBtn" class="small" style="margin-top:8px;">Logout</button>
 
   <div class="houses" id="housesContainer"></div>
 
@@ -54,28 +57,18 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+  import { 
+    getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp 
+  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-  // === LOGIN SYSTEM ===
-  const LOGIN_USER = "admin";   // change to your chosen username
-  const PASSWORD_USER = "Ch0c0l@t3o518";
-  const loginBox = document.getElementById('loginBox');
-  const mainPanel = document.getElementById('mainPanel');
-  const loginBtn = document.getElementById('loginBtn');
-  const loginMsg = document.getElementById('loginMsg');
+  import {
+    getAuth,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-  loginBtn.addEventListener('click', ()=>{
-    const u = document.getElementById('user').value.trim();
-    const p = document.getElementById('pass').value.trim();
-    if(u===LOGIN_USER && p===PASSWORD_USER){
-      loginBox.style.display='none';
-      mainPanel.style.display='block';
-    } else {
-      loginMsg.textContent = "Invalid credentials.";
-    }
-  });
-
-  // === FIREBASE ===
+  // === FIREBASE CONFIG ===
   const firebaseConfig = {
     apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
     authDomain: "ala-house-leaderboard.firebaseapp.com",
@@ -85,8 +78,57 @@
     appId: "1:827317744881:web:c8518ba6523610ab006550",
     measurementId: "G-W47XZ87CQE"
   };
+
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth();
+
+  const loginBox = document.getElementById('loginBox');
+  const mainPanel = document.getElementById('mainPanel');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const loginMsg = document.getElementById('loginMsg');
+
+  // === LOGIN HANDLER ===
+  loginBtn.addEventListener("click", async () => {
+    const email = document.getElementById('email').value.trim();
+    const pass = document.getElementById('pass').value.trim();
+
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      loginMsg.textContent = "";
+    } catch (err) {
+      loginMsg.textContent = "Invalid login.";
+    }
+  });
+
+  // === LOGOUT ===
+  logoutBtn.addEventListener("click", async () => {
+    await signOut(auth);
+  });
+
+  // === AUTH STATE + ADMIN CLAIM CHECK ===
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      mainPanel.style.display = "none";
+      loginBox.style.display = "flex";
+      return;
+    }
+
+    const token = await user.getIdTokenResult();
+    const isAdmin = !!token.claims.admin;
+
+    if (!isAdmin) {
+      loginMsg.textContent = "Not authorized.";
+      await signOut(auth);
+      return;
+    }
+
+    loginBox.style.display = "none";
+    mainPanel.style.display = "block";
+  });
+
+  // === FIRESTORE ===
   const scoresDoc = doc(db, "leaderboard", "scores");
 
   const houses = [
@@ -111,7 +153,7 @@
         <button class="small" data-house="${h.id}" data-val="5">+5</button>
         <button class="small" data-house="${h.id}" data-val="10">+10</button>
         <button class="small" data-house="${h.id}" data-val="20">+20</button>
-        <button class="small" data-house="${h.id}" data-val="-5">-5</button>
+        <button class="small" data-house="${h.id}" data-val="-5">-5</button"
         <button class="small" data-house="${h.id}" data-val="-10">-10</button>
       </div>
       <div class="row">
@@ -164,13 +206,13 @@
         t.update(scoresDoc, {
           [house]: newVal,
           lastAction: { house, delta, timestamp: serverTimestamp() },
-          _confetti: { house }  // triggers confetti on display only
+          _confetti: { house }
         });
       });
       setTimeout(()=> setDoc(scoresDoc, { _confetti: null }, { merge: true }), 1200);
     }catch(err){
       console.error('Transaction failed:', err);
-      alert('Failed to apply change. Check console for details.');
+      alert('Failed to apply change.');
     }
   }
 
