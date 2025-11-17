@@ -24,8 +24,8 @@
   .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 
   .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
-  .login input{padding:10px;border:1px solid #ccc;border-radius:6px;}
-  .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer}
+  .login input{padding:10px;border:1px solid #ccc;border-radius:6px;width:260px;}
+  .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer;width:260px;}
 </style>
 </head>
 <body>
@@ -33,18 +33,30 @@
 <!-- LOGIN -->
 <div class="login" id="loginBox">
   <h3>Admin Login</h3>
+
+  <!-- Email/password -->
   <input type="email" id="email" placeholder="Email">
-  <input type="password" id="pass" placeholder="Password">
-  <button id="loginBtn">Login</button>
+  <input type="password" id="pw" placeholder="Password">
+  <button id="pwLogin">Login</button>
+
+  <!-- Email link login -->
+  <input type="email" id="emailLink" placeholder="Email (magic link)">
+  <button id="emailLinkBtn">Send Email Link</button>
+
+  <!-- SMS login -->
+  <input type="tel" id="smsPhone" placeholder="Phone e.g. +14805187889">
+  <div id="recaptcha-container"></div>
+  <button id="smsBtn">Send SMS Code</button>
+  <input type="text" id="smsCode" placeholder="Code">
+  <button id="smsVerify">Verify SMS</button>
+
   <div id="loginMsg" class="muted"></div>
 </div>
 
 <!-- MAIN CONTROL -->
 <div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
-  <div class="muted">Use this panel to add/remove points, undo last action, or reset all scores.</div>
-
-  <button id="logoutBtn" class="small" style="margin-top:8px;">Logout</button>
+  <div class="muted">Modify house points below.</div>
 
   <div class="houses" id="housesContainer"></div>
 
@@ -53,6 +65,8 @@
     <button id="resetBtn" class="danger">Reset All</button>
     <div class="muted" id="lastActionText"></div>
   </div>
+
+  <button id="logoutBtn" class="small">Logout</button>
 </div>
 
 <script type="module">
@@ -65,71 +79,31 @@
     getAuth,
     onAuthStateChanged,
     signInWithEmailAndPassword,
+    sendSignInLinkToEmail,
+    isSignInWithEmailLink,
+    signInWithEmailLink,
+    RecaptchaVerifier,
+    signInWithPhoneNumber,
     signOut
   } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-  // === FIREBASE CONFIG ===
+  // Firebase
   const firebaseConfig = {
     apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
     authDomain: "ala-house-leaderboard.firebaseapp.com",
     projectId: "ala-house-leaderboard",
     storageBucket: "ala-house-leaderboard.firebasestorage.app",
     messagingSenderId: "827317744881",
-    appId: "1:827317744881:web:c8518ba6523610ab006550",
-    measurementId: "G-W47XZ87CQE"
+    appId: "1:827317744881:web:c8518ba6523610ab006550"
   };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const auth = getAuth();
+  const auth = getAuth(app);
 
-  const loginBox = document.getElementById('loginBox');
-  const mainPanel = document.getElementById('mainPanel');
-  const loginBtn = document.getElementById('loginBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const loginMsg = document.getElementById('loginMsg');
-
-  // === LOGIN HANDLER ===
-  loginBtn.addEventListener("click", async () => {
-    const email = document.getElementById('email').value.trim();
-    const pass = document.getElementById('pass').value.trim();
-
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-      loginMsg.textContent = "";
-    } catch (err) {
-      loginMsg.textContent = "Invalid login.";
-    }
-  });
-
-  // === LOGOUT ===
-  logoutBtn.addEventListener("click", async () => {
-    await signOut(auth);
-  });
-
-  // === AUTH STATE + ADMIN CLAIM CHECK ===
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      mainPanel.style.display = "none";
-      loginBox.style.display = "flex";
-      return;
-    }
-
-    const token = await user.getIdTokenResult();
-    const isAdmin = !!token.claims.admin;
-
-    if (!isAdmin) {
-      loginMsg.textContent = "Not authorized.";
-      await signOut(auth);
-      return;
-    }
-
-    loginBox.style.display = "none";
-    mainPanel.style.display = "block";
-  });
-
-  // === FIRESTORE ===
-  const scoresDoc = doc(db, "leaderboard", "scores");
+  const loginBox = document.getElementById("loginBox");
+  const mainPanel = document.getElementById("mainPanel");
+  const loginMsg = document.getElementById("loginMsg");
 
   const houses = [
     {id:'red', name:'Red House', color:'#d90b1e', text:'#fff'},
@@ -139,11 +113,77 @@
   ];
 
   const container = document.getElementById('housesContainer');
+  const scoresDoc = doc(db, "leaderboard", "scores");
   const lastActionText = document.getElementById('lastActionText');
-  const undoBtn = document.getElementById('undoBtn');
-  const resetBtn = document.getElementById('resetBtn');
 
-  houses.forEach(h=>{
+  // ---------------- AUTH ----------------
+
+  // Email/password
+  pwLogin.onclick = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, email.value, pw.value);
+    } catch {
+      loginMsg.textContent = "Login failed.";
+    }
+  };
+
+  // Email link login
+  emailLinkBtn.onclick = async () => {
+    const actionSettings = {
+      url: window.location.href,
+      handleCodeInApp: true
+    };
+    await sendSignInLinkToEmail(auth, emailLink.value, actionSettings);
+    localStorage.setItem("emailForLink", emailLink.value);
+  };
+
+  if (isSignInWithEmailLink(auth, window.location.href)) {
+    const email = localStorage.getItem("emailForLink");
+    if (email) await signInWithEmailLink(auth, email, window.location.href);
+  }
+
+  // SMS
+  window.recaptchaVerifier = new RecaptchaVerifier(
+    'recaptcha-container',
+    { size: "invisible" },
+    auth
+  );
+
+  smsBtn.onclick = async () => {
+    window.confirmationResult = await signInWithPhoneNumber(
+      auth,
+      smsPhone.value,
+      window.recaptchaVerifier
+    );
+  };
+
+  smsVerify.onclick = async () => {
+    await window.confirmationResult.confirm(smsCode.value);
+  };
+
+  // Admin-gate
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      loginBox.style.display = "flex";
+      mainPanel.style.display = "none";
+      return;
+    }
+
+    const token = await user.getIdTokenResult();
+    if (token.claims.admin === true) {
+      loginBox.style.display = "none";
+      mainPanel.style.display = "block";
+    } else {
+      loginMsg.textContent = "Not authorized.";
+      await signOut(auth);
+    }
+  });
+
+  logoutBtn.onclick = () => signOut(auth);
+
+  // ---------------- HOUSES UI ----------------
+
+  houses.forEach(h => {
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
@@ -153,7 +193,7 @@
         <button class="small" data-house="${h.id}" data-val="5">+5</button>
         <button class="small" data-house="${h.id}" data-val="10">+10</button>
         <button class="small" data-house="${h.id}" data-val="20">+20</button>
-        <button class="small" data-house="${h.id}" data-val="-5">-5</button"
+        <button class="small" data-house="${h.id}" data-val="-5">-5</button>
         <button class="small" data-house="${h.id}" data-val="-10">-10</button>
       </div>
       <div class="row">
@@ -192,7 +232,8 @@
       el.textContent = data[h.id] ?? 0;
     });
     if(data.lastAction){
-      lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.() || Date.now()).toLocaleTimeString()}`;
+      lastActionText.textContent =
+        `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta}`;
     } else lastActionText.textContent = '';
   });
 
@@ -202,46 +243,38 @@
         const snap = await t.get(scoresDoc);
         if(!snap.exists()) t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
         const cur = snap.data();
-        const newVal = (cur[house] || 0) + delta;
         t.update(scoresDoc, {
-          [house]: newVal,
+          [house]: (cur[house] || 0) + delta,
           lastAction: { house, delta, timestamp: serverTimestamp() },
           _confetti: { house }
         });
       });
       setTimeout(()=> setDoc(scoresDoc, { _confetti: null }, { merge: true }), 1200);
     }catch(err){
-      console.error('Transaction failed:', err);
       alert('Failed to apply change.');
     }
   }
 
-  undoBtn.addEventListener('click', async ()=>{
+  undoBtn.onclick = async ()=>{
     try{
       await runTransaction(db, async (t)=>{
         const snap = await t.get(scoresDoc);
-        if(!snap.exists()) throw "No scores doc";
         const data = snap.data();
         const la = data.lastAction;
-        if(!la) throw "No last action to undo";
-        const house = la.house;
-        const delta = la.delta || 0;
-        const newVal = (data[house] || 0) - delta;
+        if(!la) throw "no";
         t.update(scoresDoc, {
-          [house]: newVal,
+          [la.house]: (data[la.house] || 0) - la.delta,
           lastAction: null,
           _confetti: null
         });
       });
-    }catch(e){ alert(typeof e==='string'?e:'Undo failed'); }
-  });
+    }catch{}
+  };
 
-  resetBtn.addEventListener('click', async ()=>{
-    if(!confirm('Reset all points to 0? This cannot be undone.')) return;
-    try{
-      await setDoc(scoresDoc, { red:0, white:0, blue:0, silver:0, lastAction:null, _confetti:null });
-    }catch(e){ alert('Reset failed'); }
-  });
+  resetBtn.onclick = async ()=>{
+    if(!confirm('Reset all points?')) return;
+    await setDoc(scoresDoc, { red:0, white:0, blue:0, silver:0, lastAction:null, _confetti:null });
+  };
 </script>
 </body>
 </html>
