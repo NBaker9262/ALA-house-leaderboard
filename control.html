@@ -1,15 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Control - House Points</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
-  #loading{font-size:20px;text-align:center;margin-top:40px;}
-  #loginPanel, #mainPanel{display:none;}
-  .wrap{max-width:980px;margin:0 auto;}
+  .wrap{max-width:980px;margin:0 auto;display:none;}
+  h2{margin:0 0 8px 0}
   .houses{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;}
   .card{flex:1 1 45%;background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
   .house-name{font-weight:700;margin-bottom:8px}
@@ -21,49 +20,42 @@
   .danger{background:#e74c3c;color:#fff}
   .muted{color:#666;font-size:13px}
   .row{display:flex;gap:8px;margin-top:10px;align-items:center}
-  input[type="number"], input[type="email"], input[type="password"], input[type="text"]{
-    padding:10px;border:1px solid #ccc;border-radius:6px;
-  }
-  #loginBox{max-width:420px;margin:0 auto;padding:20px;background:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06);}
+  input[type="number"], input[type="text"], input[type="email"], input[type="tel"], input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
+  .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
+  .login input{padding:10px;border:1px solid #ccc;border-radius:6px;width:200px;}
+  .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer;width:220px;}
+  .login h3{margin-bottom:5px;}
 </style>
 </head>
-
 <body>
 
-<div id="loading">Loading…</div>
+<!-- LOGIN -->
+<div class="login" id="loginBox">
+  <h3>Admin Sign In</h3>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button id="emailPassBtn">Sign in with Email/Password</button>
 
-<!-- AUTH PANEL -->
-<div id="loginPanel">
-  <div id="loginBox">
-    <h3>Admin Sign-In</h3>
+  <div style="margin:10px 0;">OR</div>
 
-    <p class="muted">Email + Password</p>
-    <input id="email" type="email" placeholder="Email"><br><br>
-    <input id="password" type="password" placeholder="Password"><br><br>
-    <button id="loginBtn">Sign In</button>
-    <br><br>
+  <input type="email" id="emailLink" placeholder="Email for sign-in link">
+  <button id="sendLinkBtn">Send One-Time Link</button>
 
-    <p class="muted">Send one-time email link</p>
-    <input id="emailLinkField" type="email" placeholder="Email for login link">
-    <button id="emailLinkBtn">Send Link</button>
-    <br><br>
+  <div style="margin:10px 0;">OR</div>
 
-    <p class="muted">SMS Login</p>
-    <div id="recaptcha-container"></div><br>
-    <input id="phoneField" type="text" placeholder="+14805187889">
-    <button id="smsBtn">Send SMS</button><br><br>
+  <input type="tel" id="phone" placeholder="Phone number (+1...)">
+  <button id="sendSmsBtn">Send SMS Code</button>
+  <input type="text" id="smsCode" placeholder="Enter SMS code">
+  <button id="verifySmsBtn">Verify SMS</button>
 
-    <input id="smsCode" type="text" placeholder="Code from SMS">
-    <button id="smsVerifyBtn">Verify Code</button>
-
-    <div id="loginMsg" class="muted"></div>
-  </div>
+  <div id="loginMsg" class="muted"></div>
 </div>
 
-<!-- MAIN PANEL -->
+<!-- MAIN CONTROL -->
 <div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
-  <div class="muted">Use this panel to modify scores.</div>
+  <div class="muted">Use this panel to add/remove points, undo last action, or reset all scores.</div>
 
   <div class="houses" id="housesContainer"></div>
 
@@ -71,23 +63,22 @@
     <button id="undoBtn" class="small">Undo Last</button>
     <button id="resetBtn" class="danger">Reset All</button>
     <div class="muted" id="lastActionText"></div>
+    <button id="signOutBtn" class="small">Sign Out</button>
   </div>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import {
-    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-    RecaptchaVerifier, signInWithPhoneNumber,
-    sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
+  import { 
+    getFirestore, doc, getDoc, setDoc, runTransaction, onSnapshot, serverTimestamp 
+  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+  import { 
+    getAuth, signInWithEmailAndPassword, sendSignInLinkToEmail,
+    isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged,
+    RecaptchaVerifier, signInWithPhoneNumber, signOut
   } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-  import {
-    getFirestore, doc, getDoc, setDoc, runTransaction,
-    onSnapshot, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-
-  // FIREBASE CONFIG
+  // === FIREBASE ===
   const firebaseConfig = {
     apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
     authDomain: "ala-house-leaderboard.firebaseapp.com",
@@ -97,85 +88,16 @@
     appId: "1:827317744881:web:c8518ba6523610ab006550",
     measurementId: "G-W47XZ87CQE"
   };
-
   const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
   const db = getFirestore(app);
-
-  const loading = document.getElementById('loading');
-  const loginPanel = document.getElementById('loginPanel');
-  const mainPanel = document.getElementById('mainPanel');
-
-  // ADMIN-ONLY ACCESS CHECK
-  onAuthStateChanged(auth, async (user)=>{
-    if(!user){
-      loading.style.display="none";
-      loginPanel.style.display="block";
-      return;
-    }
-
-    const token = await user.getIdTokenResult();
-    if(token.claims.admin === true){
-      loginPanel.style.display="none";
-      loading.style.display="none";
-      mainPanel.style.display="block";
-    } else {
-      alert("Not authorized.");
-      auth.signOut();
-    }
-  });
-
-  // EMAIL/PASS LOGIN
-  loginBtn.addEventListener("click", async ()=>{
-    try{
-      await signInWithEmailAndPassword(auth, email.value, password.value);
-    }catch(e){
-      loginMsg.textContent = e.message;
-    }
-  });
-
-  // EMAIL LINK LOGIN
-  emailLinkBtn.addEventListener("click", async ()=>{
-    const emailVal = emailLinkField.value.trim();
-    const actionCodeSettings = {
-      url: window.location.href,
-      handleCodeInApp: true,
-    };
-    await sendSignInLinkToEmail(auth, emailVal, actionCodeSettings);
-    loginMsg.textContent = "Email link sent.";
-    window.localStorage.setItem("loginEmail", emailVal);
-  });
-
-  if(isSignInWithEmailLink(auth, window.location.href)){
-    const emailVal = window.localStorage.getItem("loginEmail");
-    if(emailVal){
-      await signInWithEmailLink(auth, emailVal, window.location.href);
-      window.localStorage.removeItem("loginEmail");
-    }
-  }
-
-  // SMS LOGIN
-  const recaptcha = new RecaptchaVerifier(auth, "recaptcha-container", { size:"normal" });
-
-  let confirmationResult=null;
-
-  smsBtn.addEventListener("click", async ()=>{
-    const phone = phoneField.value.trim();
-    confirmationResult = await signInWithPhoneNumber(auth, phone, recaptcha);
-    loginMsg.textContent = "SMS sent.";
-  });
-
-  smsVerifyBtn.addEventListener("click", async ()=>{
-    if(!confirmationResult) return;
-    try{
-      await confirmationResult.confirm(smsCode.value.trim());
-    }catch(e){
-      loginMsg.textContent = "Invalid code.";
-    }
-  });
-
-  // === SCORES + UI EXACTLY SAME AS BEFORE ===
   const scoresDoc = doc(db, "leaderboard", "scores");
+  const auth = getAuth(app);
+
+  const loginBox = document.getElementById('loginBox');
+  const mainPanel = document.getElementById('mainPanel');
+  const loginMsg = document.getElementById('loginMsg');
+
+  // === HOUSE POINTS UI ===
   const houses = [
     {id:'red', name:'Red House', color:'#d90b1e', text:'#fff'},
     {id:'white', name:'White House', color:'#ffffff', text:'#000'},
@@ -183,13 +105,18 @@
     {id:'silver', name:'Silver House', color:'#d8dbe0', text:'#000'}
   ];
 
-  const container = document.getElementById("housesContainer");
-  const lastActionText = document.getElementById("lastActionText");
-  const undoBtn = document.getElementById("undoBtn");
-  const resetBtn = document.getElementById("resetBtn");
+  const container = document.getElementById('housesContainer');
+  const lastActionText = document.getElementById('lastActionText');
+  const undoBtn = document.getElementById('undoBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+
+  const bars = {}; // not needed here, main leaderboard handles visuals
+  const labels = {}; 
+  const icons = {}; 
 
   houses.forEach(h=>{
-    const card = document.createElement("div");
+    const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
       <div class="house-name" style="color:${h.text};background:${h.color};padding:3px 6px;border-radius:4px;">${h.name}</div>
@@ -207,14 +134,12 @@
       </div>
     `;
     container.appendChild(card);
-
-    card.querySelectorAll("button.small").forEach(btn=>{
-      btn.addEventListener("click", ()=> applyChange(h.id, Number(btn.dataset.val)));
+    card.querySelectorAll('button.small').forEach(btn=>{
+      btn.addEventListener('click', ()=> applyChange(h.id, Number(btn.dataset.val)));
     });
-
-    card.querySelector(`#apply-${h.id}`).addEventListener("click", ()=>{
+    card.querySelector(`#apply-${h.id}`).addEventListener('click', ()=>{
       const v = Number(card.querySelector(`#custom-${h.id}`).value || 0);
-      if(v!==0) applyChange(h.id,v);
+      if(v!==0) applyChange(h.id, v);
     });
   });
 
@@ -230,51 +155,139 @@
   }
   initIfMissing();
 
-  onSnapshot(scoresDoc,(snap)=>{
+  onSnapshot(scoresDoc, (snap)=>{
     if(!snap.exists()) return;
     const data = snap.data();
     houses.forEach(h=>{
-      const el=document.getElementById("pts-"+h.id);
-      el.textContent=data[h.id] ?? 0;
+      const el = document.getElementById('pts-'+h.id);
+      el.textContent = data[h.id] ?? 0;
     });
     if(data.lastAction){
-      lastActionText.textContent=`Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta}`;
-    } else lastActionText.textContent='';
+      lastActionText.textContent = `Last: ${data.lastAction.house} ${data.lastAction.delta>0?'+':''}${data.lastAction.delta} at ${new Date(data.lastAction.timestamp?.toDate?.() || Date.now()).toLocaleTimeString()}`;
+    } else lastActionText.textContent = '';
   });
 
   async function applyChange(house, delta){
-    await runTransaction(db, async (t)=>{
-      const snap = await t.get(scoresDoc);
-      const cur = snap.data();
-      t.update(scoresDoc,{
-        [house]: (cur[house]||0)+delta,
-        lastAction:{house,delta,timestamp:serverTimestamp()},
-        _confetti:{house}
+    try{
+      await runTransaction(db, async (t)=>{
+        const snap = await t.get(scoresDoc);
+        if(!snap.exists()) t.set(scoresDoc, {red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
+        const cur = snap.data();
+        const newVal = (cur[house] || 0) + delta;
+        t.update(scoresDoc, {
+          [house]: newVal,
+          lastAction: { house, delta, timestamp: serverTimestamp() },
+          _confetti: { house }
+        });
       });
-    });
-    setTimeout(()=> setDoc(scoresDoc,{_confetti:null},{merge:true}),1000);
+      setTimeout(()=> setDoc(scoresDoc, { _confetti: null }, { merge: true }), 1200);
+    }catch(err){
+      console.error('Transaction failed:', err);
+      alert('Failed to apply change.');
+    }
   }
 
-  undoBtn.addEventListener("click", async ()=>{
-    await runTransaction(db, async (t)=>{
-      const snap=await t.get(scoresDoc);
-      const d=snap.data();
-      const la=d.lastAction;
-      if(!la) return;
-      const newVal=(d[la.house]||0)-la.delta;
-      t.update(scoresDoc,{
-        [la.house]:newVal,
-        lastAction:null,
-        _confetti:null
+  undoBtn.addEventListener('click', async ()=>{
+    try{
+      await runTransaction(db, async (t)=>{
+        const snap = await t.get(scoresDoc);
+        if(!snap.exists()) throw "No scores doc";
+        const data = snap.data();
+        const la = data.lastAction;
+        if(!la) throw "No last action to undo";
+        const house = la.house;
+        const delta = la.delta || 0;
+        const newVal = (data[house] || 0) - delta;
+        t.update(scoresDoc, {
+          [house]: newVal,
+          lastAction: null,
+          _confetti: null
+        });
       });
-    });
+    }catch(e){ alert(typeof e==='string'?e:'Undo failed'); }
   });
 
-  resetBtn.addEventListener("click", async ()=>{
-    if(!confirm("Reset all points?")) return;
-    await setDoc(scoresDoc,{red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null});
+  resetBtn.addEventListener('click', async ()=>{
+    if(!confirm('Reset all points to 0? This cannot be undone.')) return;
+    try{
+      await setDoc(scoresDoc, { red:0, white:0, blue:0, silver:0, lastAction:null, _confetti:null });
+    }catch(e){ alert('Reset failed'); }
   });
 
+  signOutBtn.addEventListener('click', async ()=>{ await signOut(auth); });
+
+  // === AUTH ===
+  const email = document.getElementById('email');
+  const password = document.getElementById('password');
+  const emailLinkInput = document.getElementById('emailLink');
+  const phoneInput = document.getElementById('phone');
+  const smsCodeInput = document.getElementById('smsCode');
+
+  const emailPassBtn = document.getElementById('emailPassBtn');
+  const sendLinkBtn = document.getElementById('sendLinkBtn');
+  const sendSmsBtn = document.getElementById('sendSmsBtn');
+  const verifySmsBtn = document.getElementById('verifySmsBtn');
+
+  const recaptchaContainer = document.createElement('div');
+  document.body.appendChild(recaptchaContainer);
+  const recaptchaVerifier = new RecaptchaVerifier(recaptchaContainer, {size:'invisible'}, auth);
+
+  emailPassBtn.addEventListener('click', async ()=>{
+    try{
+      await signInWithEmailAndPassword(auth,email.value,password.value);
+    }catch(e){ loginMsg.textContent = e.message; }
+  });
+
+  sendLinkBtn.addEventListener('click', async ()=>{
+    try{
+      const actionCodeSettings = {url: window.location.href, handleCodeInApp: true};
+      await sendSignInLinkToEmail(auth,emailLinkInput.value,actionCodeSettings);
+      window.localStorage.setItem('emailForSignIn', emailLinkInput.value);
+      loginMsg.textContent = "Check your email for the link.";
+    }catch(e){ loginMsg.textContent=e.message; }
+  });
+
+  sendSmsBtn.addEventListener('click', async ()=>{
+    try{
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneInput.value, recaptchaVerifier);
+      window.confirmationResult = confirmationResult;
+      loginMsg.textContent = "SMS code sent.";
+    }catch(e){ loginMsg.textContent=e.message; }
+  });
+
+  verifySmsBtn.addEventListener('click', async ()=>{
+    try{
+      if(!window.confirmationResult) throw "No SMS sent.";
+      await window.confirmationResult.confirm(smsCodeInput.value);
+    }catch(e){ loginMsg.textContent = e.message; }
+  });
+
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      const token = await user.getIdTokenResult();
+      if(token.claims.admin){
+        loginBox.style.display='none';
+        mainPanel.style.display='block';
+      }else{
+        loginBox.style.display='block';
+        mainPanel.style.display='none';
+        loginMsg.textContent = "You are not an admin.";
+        await signOut(auth);
+      }
+    } else {
+      loginBox.style.display='block';
+      mainPanel.style.display='none';
+    }
+
+    // handle email link sign-in
+    if(isSignInWithEmailLink(auth, window.location.href)){
+      let emailLink = window.localStorage.getItem('emailForSignIn') || window.prompt('Enter email for link sign-in:');
+      try{
+        const result = await signInWithEmailLink(auth,emailLink,window.location.href);
+        window.localStorage.removeItem('emailForSignIn');
+      }catch(e){ loginMsg.textContent=e.message; }
+    }
+  });
 </script>
 </body>
 </html>
