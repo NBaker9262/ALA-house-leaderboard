@@ -36,20 +36,6 @@
   <input type="email" id="email" placeholder="Email">
   <input type="password" id="password" placeholder="Password">
   <button id="emailPassBtn">Sign in with Email/Password</button>
-
-  <div style="margin:10px 0;">OR</div>
-
-  <input type="email" id="emailLink" placeholder="Email for sign-in link">
-  <button id="sendLinkBtn">Send One-Time Link</button>
-
-  <div style="margin:10px 0;">OR</div>
-
-  <input type="tel" id="phone" placeholder="Phone number (+1...)">
-  <button id="sendSmsBtn">Send SMS Code</button>
-  <input type="text" id="smsCode" placeholder="Enter SMS code">
-  <button id="verifySmsBtn">Verify SMS</button>
-
-  <div id="loginMsg" class="muted"></div>
 </div>
 
 <!-- MAIN CONTROL -->
@@ -219,49 +205,15 @@
   // === AUTH ===
   const email = document.getElementById('email');
   const password = document.getElementById('password');
-  const emailLinkInput = document.getElementById('emailLink');
-  const phoneInput = document.getElementById('phone');
-  const smsCodeInput = document.getElementById('smsCode');
 
   const emailPassBtn = document.getElementById('emailPassBtn');
-  const sendLinkBtn = document.getElementById('sendLinkBtn');
-  const sendSmsBtn = document.getElementById('sendSmsBtn');
-  const verifySmsBtn = document.getElementById('verifySmsBtn');
-
-  const recaptchaContainer = document.createElement('div');
-  document.body.appendChild(recaptchaContainer);
-  const recaptchaVerifier = new RecaptchaVerifier(recaptchaContainer, {size:'invisible'}, auth);
 
   emailPassBtn.addEventListener('click', async ()=>{
     try{
       await signInWithEmailAndPassword(auth,email.value,password.value);
     }catch(e){ loginMsg.textContent = e.message; }
   });
-
-  sendLinkBtn.addEventListener('click', async ()=>{
-    try{
-      const actionCodeSettings = {url: window.location.href, handleCodeInApp: true};
-      await sendSignInLinkToEmail(auth,emailLinkInput.value,actionCodeSettings);
-      window.localStorage.setItem('emailForSignIn', emailLinkInput.value);
-      loginMsg.textContent = "Check your email for the link.";
-    }catch(e){ loginMsg.textContent=e.message; }
-  });
-
-  sendSmsBtn.addEventListener('click', async ()=>{
-    try{
-      const confirmationResult = await signInWithPhoneNumber(auth, phoneInput.value, recaptchaVerifier);
-      window.confirmationResult = confirmationResult;
-      loginMsg.textContent = "SMS code sent.";
-    }catch(e){ loginMsg.textContent=e.message; }
-  });
-
-  verifySmsBtn.addEventListener('click', async ()=>{
-    try{
-      if(!window.confirmationResult) throw "No SMS sent.";
-      await window.confirmationResult.confirm(smsCodeInput.value);
-    }catch(e){ loginMsg.textContent = e.message; }
-  });
-
+  
   onAuthStateChanged(auth, async (user)=>{
     if(user){
       const token = await user.getIdTokenResult();
@@ -277,15 +229,6 @@
     } else {
       loginBox.style.display='block';
       mainPanel.style.display='none';
-    }
-
-    // handle email link sign-in
-    if(isSignInWithEmailLink(auth, window.location.href)){
-      let emailLink = window.localStorage.getItem('emailForSignIn') || window.prompt('Enter email for link sign-in:');
-      try{
-        const result = await signInWithEmailLink(auth,emailLink,window.location.href);
-        window.localStorage.removeItem('emailForSignIn');
-      }catch(e){ loginMsg.textContent=e.message; }
     }
   });
 </script>
