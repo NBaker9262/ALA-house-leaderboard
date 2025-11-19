@@ -28,7 +28,7 @@
 const v = document.getElementById("v");
 
 v.addEventListener("timeupdate", () => {
-  if (v.duration && v.currentTime >= v.duration - 0.1) {
+  if (v.duration && v.currentTime >= v.duration - 0.01) {
     v.pause();
     v.currentTime = v.duration; // hold last frame
     v.removeAttribute("controls");
