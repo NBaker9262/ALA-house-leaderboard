@@ -3,13 +3,6 @@
 <head>
 <meta charset="utf-8">
 <style>
-  video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    background: black;
-  }
-  /* fully hide default UI when controls attribute is absent */
   video::-webkit-media-controls { display: none !important; }
 </style>
 </head>
@@ -17,23 +10,19 @@
 
 <video
   id="v"
-  src="YOUR_GITHUB_RAW_MP4_LINK"
+  src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4"
   playsinline
   autoplay
 ></video>
 
 <script>
 const v = document.getElementById("v");
-
-// temporarily show controls only while Ctrl+Space is held
 let keys = new Set();
 
 document.addEventListener("keydown", (e) => {
   keys.add(e.code);
-  if (keys.has("ControlLeft") || keys.has("ControlRight")) {
-    if (keys.has("Space")) {
-      v.setAttribute("controls", "");
-    }
+  if ((keys.has("ControlLeft") || keys.has("ControlRight")) && keys.has("Space")) {
+    v.setAttribute("controls", "");
   }
 });
 
