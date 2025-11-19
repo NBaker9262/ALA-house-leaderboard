@@ -1,8 +1,33 @@
 <!doctype html>
 <html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* square display area */
+  #box {
+    width: 600px;     /* set this to whatever your display size is */
+    height: 600px;    /* same value to keep it square */
+    background: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* video scales inside without stretching */
+  #v {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: black;
+  }
+</style>
+</head>
 <body>
 
-<video id="v" src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4" controls></video>
+<div id="box">
+  <video id="v" src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4" controls></video>
+</div>
 
 <script>
 const v = document.getElementById("v");
