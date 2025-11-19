@@ -1,38 +1,8 @@
 <!doctype html>
 <html>
-<head>
-<meta charset="utf-8">
-<style>
-  video::-webkit-media-controls { display: none !important; }
-</style>
-</head>
 <body>
 
-<video
-  id="v"
-  src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4"
-  playsinline
-  autoplay
-></video>
-
-<script>
-const v = document.getElementById("v");
-let keys = new Set();
-
-document.addEventListener("keydown", (e) => {
-  keys.add(e.code);
-  if ((keys.has("ControlLeft") || keys.has("ControlRight")) && keys.has("Space")) {
-    v.setAttribute("controls", "");
-  }
-});
-
-document.addEventListener("keyup", (e) => {
-  keys.delete(e.code);
-  if (!((keys.has("ControlLeft") || keys.has("ControlRight")) && keys.has("Space"))) {
-    v.removeAttribute("controls");
-  }
-});
-</script>
+<video src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4" controls></video>
 
 </body>
 </html>
