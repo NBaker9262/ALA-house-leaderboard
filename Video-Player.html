@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  video::-webkit-media-controls {
+    display: none !important;
+  }
+  video::-moz-media-controls {
+    display: none !important;
+  }
+  video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    background:black;
+  }
+</style>
+</head>
+<body>
+
+<video
+  id="v"
+  src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4"
+  autoplay
+  playsinline
+  controls
+  controlslist="nodownload noplaybackrate noremoteplayback"
+>
+</video>
+
+<script>
+  // hide controls once playback starts
+  const v = document.getElementById('v');
+  v.addEventListener('play', () => {
+    v.removeAttribute('controls');
+  });
+</script>
+
+</body>
+</html>
