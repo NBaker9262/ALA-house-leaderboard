@@ -3,38 +3,46 @@
 <head>
 <meta charset="utf-8">
 <style>
-  video::-webkit-media-controls {
-    display: none !important;
-  }
-  video::-moz-media-controls {
-    display: none !important;
-  }
   video {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
-    background:black;
+    background: black;
   }
+  /* fully hide default UI when controls attribute is absent */
+  video::-webkit-media-controls { display: none !important; }
 </style>
 </head>
 <body>
 
 <video
   id="v"
-  src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4"
-  autoplay
+  src="YOUR_GITHUB_RAW_MP4_LINK"
   playsinline
-  controls
-  controlslist="nodownload noplaybackrate noremoteplayback"
->
-</video>
+  autoplay
+></video>
 
 <script>
-  // hide controls once playback starts
-  const v = document.getElementById('v');
-  v.addEventListener('play', () => {
-    v.removeAttribute('controls');
-  });
+const v = document.getElementById("v");
+
+// temporarily show controls only while Ctrl+Space is held
+let keys = new Set();
+
+document.addEventListener("keydown", (e) => {
+  keys.add(e.code);
+  if (keys.has("ControlLeft") || keys.has("ControlRight")) {
+    if (keys.has("Space")) {
+      v.setAttribute("controls", "");
+    }
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  keys.delete(e.code);
+  if (!((keys.has("ControlLeft") || keys.has("ControlRight")) && keys.has("Space"))) {
+    v.removeAttribute("controls");
+  }
+});
 </script>
 
 </body>
