@@ -2,7 +2,18 @@
 <html>
 <body>
 
-<video src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4" controls></video>
+<video id="v" src="https://github.com/NBaker9262/ALA-house-leaderboard/raw/refs/heads/main/ALA%20Vistancia%20House%20Logo%20Reveal%20Video.mp4" controls></video>
+
+<script>
+const v = document.getElementById("v");
+
+v.addEventListener("timeupdate", () => {
+  if (v.duration && v.currentTime >= v.duration - 1) {
+    v.pause();
+    v.removeAttribute("controls");
+  }
+});
+</script>
 
 </body>
 </html>
