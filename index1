@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>House Points Control Panel</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f1f1f1;
+        margin: 0;
+        padding: 40px;
+    }
+
+    .container {
+        max-width: 1150px;
+        margin: auto;
+    }
+
+    h1 {
+        margin-bottom: 5px;
+    }
+
+    .subtitle {
+        color: #666;
+        margin-bottom: 25px;
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+    }
+
+    .house-card {
+        background: white;
+        border-radius: 10px;
+        padding: 0;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    }
+
+    .house-header {
+        padding: 12px 15px;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+    }
+
+    .red { background: #d72828; }
+    .white { background: #333; }
+    .blue { background: #0c2340; }
+    .silver { background: #b4b7be; color:black; }
+
+    .house-score {
+        padding: 15px;
+        font-size: 34px;
+        font-weight: bold;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+
+    .btn-group button {
+        padding: 8px 16px;
+        background: #e8e8e8;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+    }
+
+    .btn-group button:hover {
+        background: #dcdcdc;
+    }
+
+    .custom-row {
+        display: flex;
+        gap: 10px;
+        padding: 15px;
+    }
+
+    .custom-row input {
+        flex: 1;
+        padding: 8px;
+    }
+
+    .custom-row button {
+        padding: 8px 16px;
+        background: #1d8fe3;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .custom-row button:hover {
+        background: #156fb3;
+    }
+
+    .bottom-bar {
+        margin-top: 25px;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        font-size: 14px;
+        color: #333;
+    }
+
+    .undo-btn, .reset-btn, .signout-btn {
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+    }
+
+    .undo-btn { background: #ccc; }
+    .reset-btn { background: #e74c3c; color: white; }
+    .signout-btn { background: #ddd; }
+
+    .undo-btn:hover { background: #bcbcbc; }
+    .reset-btn:hover { background: #d63d2f; }
+    .signout-btn:hover { background: #c9c9c9; }
+</style>
+
+</head>
+<body>
+
+<div class="container">
+    <h1>Control Panel — House Points</h1>
+    <p class="subtitle">
+        Use this panel to add/remove points, undo last action, or reset all scores.
+    </p>
+
+    <div class="grid">
+
+        <!-- HOUSE TEMPLATE FUNCTION (red/white/blue/silver) -->
+
+        <!-- RED HOUSE -->
+        <div class="house-card">
+            <div class="house-header red">Red House</div>
+            <div class="house-score" id="score-red">202</div>
+            <div class="btn-group">
+                <button onclick="add('red', 5)">+5</button>
+                <button onclick="add('red', 10)">+10</button>
+                <button onclick="add('red', 20)">+20</button>
+                <button onclick="add('red', -5)">-5</button>
+                <button onclick="add('red', -10)">-10</button>
+            </div>
+            <div class="custom-row">
+                <input type="number" id="custom-red" placeholder="Custom +/-">
+                <button onclick="applyCustom('red')">Apply</button>
+            </div>
+        </div>
+
+        <!-- WHITE HOUSE -->
+        <div class="house-card">
+            <div class="house-header white">White House</div>
+            <div class="house-score" id="score-white">170</div>
+            <div class="btn-group">
+                <button onclick="add('white', 5)">+5</button>
+                <button onclick="add('white', 10)">+10</button>
+                <button onclick="add('white', 20)">+20</button>
+                <button onclick="add('white', -5)">-5</button>
+                <button onclick="add('white', -10)">-10</button>
+            </div>
+            <div class="custom-row">
+                <input type="number" id="custom-white" placeholder="Custom +/-">
+                <button onclick="applyCustom('white')">Apply</button>
+            </div>
+        </div>
+
+        <!-- BLUE HOUSE -->
+        <div class="house-card">
+            <div class="house-header blue">Blue House</div>
+            <div class="house-score" id="score-blue">238</div>
+            <div class="btn-group">
+                <button onclick="add('blue', 5)">+5</button>
+                <button onclick="add('blue', 10)">+10</button>
+                <button onclick="add('blue', 20)">+20</button>
+                <button onclick="add('blue', -5)">-5</button>
+                <button onclick="add('blue', -10)">-10</button>
+            </div>
+            <div class="custom-row">
+                <input type="number" id="custom-blue" placeholder="Custom +/-">
+                <button onclick="applyCustom('blue')">Apply</button>
+            </div>
+        </div>
+
+        <!-- SILVER HOUSE -->
+        <div class="house-card">
+            <div class="house-header silver">Silver House</div>
+            <div class="house-score" id="score-silver">234</div>
+            <div class="btn-group">
+                <button onclick="add('silver', 5)">+5</button>
+                <button onclick="add('silver', 10)">+10</button>
+                <button onclick="add('silver', 20)">+20</button>
+                <button onclick="add('silver', -5)">-5</button>
+                <button onclick="add('silver', -10)">-10</button>
+            </div>
+            <div class="custom-row">
+                <input type="number" id="custom-silver" placeholder="Custom +/-">
+                <button onclick="applyCustom('silver')">Apply</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bottom-bar">
+        <button class="undo-btn">Undo Last</button>
+        <button class="reset-btn">Reset All</button>
+        <span>Last: white +10 at 8:58:34 AM</span>
+        <span>Logged in as: noahmathmaster@gmail.com</span>
+        <button class="signout-btn">Sign Out</button>
+    </div>
+</div>
+
+<script>
+    function add(house, value) {
+        const scoreEl = document.getElementById(`score-${house}`);
+        let score = parseInt(scoreEl.innerHTML);
+        score += value;
+        scoreEl.innerHTML = score;
+    }
+
+    function applyCustom(house) {
+        const input = document.getElementById(`custom-${house}`);
+        let value = Number(input.value);
+        if (!isNaN(value) && input.value.trim() !== "") {
+            add(house, value);
+        }
+        input.value = "";
+    }
+</script>
+
+</body>
+</html>
