@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taskly MD3</title>
+
+<!-- MUI + React CDN -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@mui/material@5.14.0/umd/material-ui.development.js"></script>
+
+<style>
+body { margin:0; font-family:Roboto,sans-serif; background:#f6f6f6; }
+.container { max-width:850px; margin:20px auto; padding:10px; }
+.tag-chip { margin-right:6px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// Utility
+const uid = () => "t-" + Math.random().toString(36).slice(2,10);
+const nowISO = () => new Date().toISOString();
+const saveLocal = tasks => localStorage.setItem("taskly:tasks", JSON.stringify(tasks));
+const loadLocal = () => { try { return JSON.parse(localStorage.getItem("taskly:tasks")||"[]"); } catch { return []; } };
+
+// Quick parser
+function parseQuick(input){
+  let text = input, tags=[], priority="medium", due=null;
+  text = text.replace(/#(\w+)/g, (_,t)=>{ tags.push(t); return ""; });
+  const p=text.match(/!(high|medium|low)/i); if(p){ priority=p[1].toLowerCase(); text=text.replace(p[0],""); }
+  if(/\btomorrow\b/i.test(text)){ const d=new Date(); d.setDate(d.getDate()+1); due=d.toISOString(); text=text.replace(/\btomorrow\b/i,""); }
+  const inDays=text.match(/in\s+(\d+)\s+days?/i); if(inDays){ const d=new Date(); d.setDate(d.getDate()+parseInt(inDays[1])); due=d.toISOString(); text=text.replace(inDays[0],""); }
+  return { title:text.trim(), tags, priority, due };
+}
+
+// React/MUI components
+const { Button, TextField, IconButton, List, ListItem, Checkbox, Chip, Paper, Switch, AppBar, Toolbar, Typography, Divider, Box, Snackbar, Alert } = MaterialUI;
+
+function App(){
+  const [tasks,setTasks]=React.useState(loadLocal());
+  const [quick,setQuick]=React.useState("");
+  const [dark,setDark]=React.useState(false);
+  const [snack,setSnack]=React.useState({open:false,msg:"",severity:"success"});
+
+  React.useEffect(()=>saveLocal(tasks),[tasks]);
+
+  const notify=(msg,severity="success")=>setSnack({open:true,msg,severity});
+  const addTask=()=>{
+    if(!quick.trim()) return;
+    const p=parseQuick(quick);
+    setTasks([{id:uid(),title:p.title,createdAt:nowISO(),updatedAt:nowISO(),done:false,tags:p.tags,priority:p.priority,due:p.due},...tasks]);
+    setQuick("");
+    notify("Task added");
+  };
+  const toggle=id=>setTasks(tasks.map(t=>t.id===id?{...t,done:!t.done,updatedAt:nowISO()}:t));
+  const del=id=>setTasks(tasks.filter(t=>t.id!==id));
+
+  return (
+    <div style={{background:dark?"#121212":"#f6f6f6",minHeight:"100vh"}}>
+      <AppBar position="static" color={dark?"default":"primary"}>
+        <Toolbar>
+          <Typography variant="h6" sx={{flexGrow:1}}>Taskly MD3</Typography>
+          <Box display="flex" alignItems="center">
+            <Typography variant="body2" sx={{mr:1}}>Dark</Typography>
+            <Switch checked={dark} onChange={()=>setDark(!dark)} />
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      <div className="container">
+        <Paper sx={{p:2}}>
+          <TextField
+            fullWidth
+            label="Add task (Supports #tags, !high, tomorrow...)"
+            value={quick}
+            onChange={e=>setQuick(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&addTask()}
+          />
+          <Button fullWidth sx={{mt:1}} variant="contained" onClick={addTask}>Add</Button>
+        </Paper>
+
+        <Divider sx={{my:2}} />
+
+        <Paper>
+          <List>
+            {tasks.length===0?<Typography sx={{p:2}}>No tasks yet</Typography>:tasks.map(t=>
+              <ListItem key={t.id} secondaryAction={
+                <IconButton onClick={()=>del(t.id)}><span className="material-icons">delete</span></IconButton>
+              }>
+                <Checkbox checked={t.done} onChange={()=>toggle(t.id)} />
+                <div>
+                  <Typography variant="subtitle1" style={{textDecoration:t.done?"line-through":"none"}}>{t.title}</Typography>
+                  {t.tags?.map(tag=><Chip key={tag} label={"#"+tag} size="small" className="tag-chip" />)}
+                  {t.priority&&<Chip label={t.priority} size="small" color={t.priority==="high"?"error":t.priority==="medium"?"primary":"default"} />}
+                  {t.due&&<Chip size="small" label={new Date(t.due).toLocaleString()} icon={<span className="material-icons" style={{fontSize:14}}>event</span>} sx={{ml:1}} />}
+                </div>
+              </ListItem>
+            )}
+          </List>
+        </Paper>
+      </div>
+
+      <Snackbar open={snack.open} autoHideDuration={2200} onClose={()=>setSnack({...snack,open:false})}>
+        <Alert severity={snack.severity}>{snack.msg}</Alert>
+      </Snackbar>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
