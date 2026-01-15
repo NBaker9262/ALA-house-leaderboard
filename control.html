@@ -20,12 +20,14 @@ button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
 .add{background:#2d9cdb;color:#fff}
 .danger{background:#e74c3c;color:#fff}
 .row{display:flex;gap:8px;margin-top:10px}
-input[type="number"],input[type="email"],input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
+input[type="number"],input[type="text"],input[type="email"],input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
+input[type="text"]{flex:1}
 .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
 .login input{padding:10px;width:200px;}
 .login button{padding:10px 16px;border-radius:8px;border:0;background:#2d9cdb;color:#fff;}
 .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .muted{font-size:13px;color:#666}
+#historyList{max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fff;}
 </style>
 </head>
 
@@ -43,15 +45,15 @@ input[type="number"],input[type="email"],input[type="password"]{width:110px;padd
   <h2>Control Panel — House Points</h2>
   <div class="houses" id="housesContainer"></div>
 
-
   <div class="meta">
     <button id="undoBtn" class="small">Undo Last</button>
     <button id="resetBtn" class="danger">Reset All</button>
     <span id="loggedInAs" class="muted"></span>
     <button id="signOutBtn" class="small">Sign Out</button>
   </div>
+
   <h3>Point History</h3>
-  <div id="historyList" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fff;"></div>
+  <div id="historyList"></div>
 </div>
 
 <script type="module">
@@ -60,15 +62,12 @@ function formatTimestamp(ts){
   return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')} `
        + `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
 }
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
-  getFirestore, doc, collection, runTransaction,
-  onSnapshot, serverTimestamp, setDoc
+  getFirestore, doc, collection, runTransaction, onSnapshot, serverTimestamp, setDoc, query, orderBy, getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import {
-  getAuth, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
@@ -85,26 +84,22 @@ const auth = getAuth(app);
 
 const scoresDoc = doc(db,"leaderboard","scores");
 const historyCol = collection(db,"leaderboard","scores","history");
-import { query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-
 const historyList = document.getElementById("historyList");
 
 async function updateHistory(){
   const q = query(historyCol, orderBy("timestamp","desc"));
   const snap = await getDocs(q);
   historyList.innerHTML = "";
-  snap.forEach(doc => {
+  snap.forEach(doc=>{
     const h = doc.data();
     const div = document.createElement("div");
-    div.textContent = `${formatTimestamp(h.timestamp)} — ${h.house.toUpperCase()} ${h.delta>0?'+':''}${h.delta}`;
+    div.textContent = `${formatTimestamp(h.timestamp)} — ${h.house.toUpperCase()} ${h.delta>0?'+':''}${h.delta}` 
+      + (h.reason ? ` (${h.reason})` : '') 
+      + ` by ${h.adminUid}`;
     historyList.appendChild(div);
   });
 }
-
-// Call it once initially
 updateHistory();
-
-// Optional: automatically update whenever history changes
 onSnapshot(historyCol,()=>updateHistory());
 
 const houses = [
@@ -120,9 +115,7 @@ houses.forEach(h=>{
   const c=document.createElement("div");
   c.className="card";
   c.innerHTML=`
-    <div class="house-name" style="background:${h.bg};color:${h.text}">
-      ${h.name}
-    </div>
+    <div class="house-name" style="background:${h.bg};color:${h.text}">${h.name}</div>
     <div class="points" id="pts-${h.id}">0</div>
     <div class="controls">
       <button class="small" data-v="10">+10</button>
@@ -133,12 +126,11 @@ houses.forEach(h=>{
     </div>
     <div class="row">
       <input type="number" id="custom-${h.id}" placeholder="Custom +/-">
+      <input type="text" id="reason-${h.id}" placeholder="Reason (optional)">
       <button class="add" id="apply-${h.id}">Apply</button>
     </div>
   `;
-  c.querySelectorAll(".controls button").forEach(b=>{
-    b.onclick=()=>applyChange(h.id,Number(b.dataset.v));
-  });
+  c.querySelectorAll(".controls button").forEach(b=>{ b.onclick=()=>applyChange(h.id,Number(b.dataset.v)); });
   c.querySelector(`#apply-${h.id}`).onclick=()=>{
     const v=Number(c.querySelector(`#custom-${h.id}`).value||0);
     if(v!==0) applyChange(h.id,v);
@@ -147,41 +139,42 @@ houses.forEach(h=>{
 });
 
 async function applyChange(house,delta){
+  const reason = document.getElementById(`reason-${house}`).value || null;
   await runTransaction(db, async t=>{
     const snap = await t.get(scoresDoc);
-    const data = snap.data();
-
+    const data = snap.data() || {};
     t.update(scoresDoc,{
-      [house]:(data[house]||0)+delta,
-      lastAction:{house,delta,timestamp:serverTimestamp()},
-      _confetti:{house}
+      [house]: (data[house]||0)+delta,
+      lastAction: {house, delta, timestamp: serverTimestamp()},
+      _confetti: {house}
     });
-
-    t.set(doc(historyCol),{
+    const docId = new Date().toISOString();
+    t.set(doc(historyCol, docId),{
       house,
       delta,
-      timestamp:serverTimestamp(),
-      adminUid:auth.currentUser.uid
+      reason,
+      timestamp: serverTimestamp(),
+      adminUid: auth.currentUser.uid
     });
   });
 }
 
-document.getElementById("undoBtn").onclick=async()=>{
+document.getElementById("undoBtn").onclick = async () => {
   await runTransaction(db, async t=>{
     const snap = await t.get(scoresDoc);
     const la = snap.data().lastAction;
     if(!la) throw "Nothing to undo";
-
     t.update(scoresDoc,{
       [la.house]:(snap.data()[la.house]||0)-la.delta,
       lastAction:null
     });
-
-    t.set(doc(historyCol),{
-      house:la.house,
-      delta:-la.delta,
-      timestamp:serverTimestamp(),
-      adminUid:auth.currentUser.uid
+    const docId = new Date().toISOString();
+    t.set(doc(historyCol, docId),{
+      house: la.house,
+      delta: -la.delta,
+      reason: "UNDO",
+      timestamp: serverTimestamp(),
+      adminUid: auth.currentUser.uid
     });
   });
 };
