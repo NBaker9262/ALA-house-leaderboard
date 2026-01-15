@@ -42,6 +42,9 @@ input[type="number"],input[type="email"],input[type="password"]{width:110px;padd
 <div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
   <div class="houses" id="housesContainer"></div>
+  <h3>Point History</h3>
+  <div id="historyList" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:8px;background:#fff;"></div>
+
 
   <div class="meta">
     <button id="undoBtn" class="small">Undo Last</button>
@@ -52,6 +55,11 @@ input[type="number"],input[type="email"],input[type="password"]{width:110px;padd
 </div>
 
 <script type="module">
+function formatTimestamp(ts){
+  const d = ts?.toDate?.() || new Date();
+  return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')} `
+       + `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
   getFirestore, doc, collection, runTransaction,
@@ -77,6 +85,27 @@ const auth = getAuth(app);
 
 const scoresDoc = doc(db,"leaderboard","scores");
 const historyCol = collection(db,"leaderboard","scores","history");
+import { query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+const historyList = document.getElementById("historyList");
+
+async function updateHistory(){
+  const q = query(historyCol, orderBy("timestamp","desc"));
+  const snap = await getDocs(q);
+  historyList.innerHTML = "";
+  snap.forEach(doc => {
+    const h = doc.data();
+    const div = document.createElement("div");
+    div.textContent = `${formatTimestamp(h.timestamp)} — ${h.house.toUpperCase()} ${h.delta>0?'+':''}${h.delta}`;
+    historyList.appendChild(div);
+  });
+}
+
+// Call it once initially
+updateHistory();
+
+// Optional: automatically update whenever history changes
+onSnapshot(historyCol,()=>updateHistory());
 
 const houses = [
   {id:'red',name:'Red House',bg:'#d90b1e',text:'#fff'},
