@@ -7,25 +7,25 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
-  body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
-  .wrap{max-width:980px;margin:0 auto;display:none;}
-  h2{margin:0 0 8px 0}
-  .houses{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;}
-  .card{flex:1 1 45%;background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .house-name{font-weight:700;margin-bottom:8px}
-  .points{font-size:28px;font-weight:700;margin-bottom:8px}
-  .controls{display:flex;gap:8px;flex-wrap:wrap}
-  button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
-  .add{background:#2d9cdb;color:#fff}
-  .small{background:#eee}
-  .danger{background:#e74c3c;color:#fff}
-  .muted{color:#666;font-size:13px}
-  .row{display:flex;gap:8px;margin-top:10px;align-items:center}
-  input[type="number"], input[type="email"], input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
-  .meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
-  .login input{padding:10px;border:1px solid #ccc;border-radius:6px;width:200px;}
-  .login button{padding:10px 16px;border:0;border-radius:8px;background:#2d9cdb;color:#fff;cursor:pointer;width:220px;}
+body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
+.wrap{max-width:980px;margin:0 auto;display:none;}
+h2{margin:0 0 8px}
+.houses{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;}
+.card{flex:1 1 45%;background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+.house-name{font-weight:700;margin-bottom:8px;padding:4px 8px;border-radius:4px}
+.points{font-size:28px;font-weight:700;margin-bottom:8px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+.small{background:#eee}
+.add{background:#2d9cdb;color:#fff}
+.danger{background:#e74c3c;color:#fff}
+.row{display:flex;gap:8px;margin-top:10px}
+input[type="number"],input[type="email"],input[type="password"]{width:110px;padding:8px;border:1px solid #ddd;border-radius:8px}
+.login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
+.login input{padding:10px;width:200px;}
+.login button{padding:10px 16px;border-radius:8px;border:0;background:#2d9cdb;color:#fff;}
+.meta{margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.muted{font-size:13px;color:#666}
 </style>
 </head>
 
@@ -33,22 +33,20 @@
 
 <div class="login" id="loginBox">
   <h3>Admin Sign In</h3>
-  <input type="email" id="email" placeholder="Email">
-  <input type="password" id="password" placeholder="Password">
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
   <button id="emailPassBtn">Sign In</button>
   <div id="loginMsg" class="muted"></div>
 </div>
 
 <div class="wrap" id="mainPanel">
   <h2>Control Panel — House Points</h2>
-  <div class="muted">Add / remove points. All actions are logged.</div>
-
   <div class="houses" id="housesContainer"></div>
 
   <div class="meta">
     <button id="undoBtn" class="small">Undo Last</button>
     <button id="resetBtn" class="danger">Reset All</button>
-    <span class="muted" id="loggedInAs"></span>
+    <span id="loggedInAs" class="muted"></span>
     <button id="signOutBtn" class="small">Sign Out</button>
   </div>
 </div>
@@ -56,8 +54,8 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
-  getFirestore, doc, getDoc, setDoc, runTransaction,
-  onSnapshot, serverTimestamp, collection
+  getFirestore, doc, collection, runTransaction,
+  onSnapshot, serverTimestamp, setDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword,
@@ -81,43 +79,58 @@ const scoresDoc = doc(db,"leaderboard","scores");
 const historyCol = collection(db,"leaderboard","scores","history");
 
 const houses = [
-  {id:'red',name:'Red House'},
-  {id:'white',name:'White House'},
-  {id:'blue',name:'Blue House'},
-  {id:'silver',name:'Silver House'}
+  {id:'red',name:'Red House',bg:'#d90b1e',text:'#fff'},
+  {id:'white',name:'White House',bg:'#ffffff',text:'#000'},
+  {id:'blue',name:'Blue House',bg:'#122b56',text:'#fff'},
+  {id:'silver',name:'Silver House',bg:'#d8dbe0',text:'#000'}
 ];
 
 const container = document.getElementById("housesContainer");
 
 houses.forEach(h=>{
-  const card = document.createElement("div");
-  card.className="card";
-  card.innerHTML=`
-    <div class="house-name">${h.name}</div>
+  const c=document.createElement("div");
+  c.className="card";
+  c.innerHTML=`
+    <div class="house-name" style="background:${h.bg};color:${h.text}">
+      ${h.name}
+    </div>
     <div class="points" id="pts-${h.id}">0</div>
     <div class="controls">
       <button class="small" data-v="10">+10</button>
       <button class="small" data-v="20">+20</button>
+      <button class="small" data-v="50">+50</button>
       <button class="small" data-v="-10">-10</button>
+      <button class="small" data-v="-20">-20</button>
+    </div>
+    <div class="row">
+      <input type="number" id="custom-${h.id}" placeholder="Custom +/-">
+      <button class="add" id="apply-${h.id}">Apply</button>
     </div>
   `;
-  card.querySelectorAll("button").forEach(b=>{
+  c.querySelectorAll(".controls button").forEach(b=>{
     b.onclick=()=>applyChange(h.id,Number(b.dataset.v));
   });
-  container.appendChild(card);
+  c.querySelector(`#apply-${h.id}`).onclick=()=>{
+    const v=Number(c.querySelector(`#custom-${h.id}`).value||0);
+    if(v!==0) applyChange(h.id,v);
+  };
+  container.appendChild(c);
 });
 
 async function applyChange(house,delta){
   await runTransaction(db, async t=>{
     const snap = await t.get(scoresDoc);
     const data = snap.data();
+
     t.update(scoresDoc,{
       [house]:(data[house]||0)+delta,
       lastAction:{house,delta,timestamp:serverTimestamp()},
       _confetti:{house}
     });
+
     t.set(doc(historyCol),{
-      house,delta,
+      house,
+      delta,
       timestamp:serverTimestamp(),
       adminUid:auth.currentUser.uid
     });
@@ -129,10 +142,12 @@ document.getElementById("undoBtn").onclick=async()=>{
     const snap = await t.get(scoresDoc);
     const la = snap.data().lastAction;
     if(!la) throw "Nothing to undo";
+
     t.update(scoresDoc,{
       [la.house]:(snap.data()[la.house]||0)-la.delta,
       lastAction:null
     });
+
     t.set(doc(historyCol),{
       house:la.house,
       delta:-la.delta,
@@ -151,7 +166,9 @@ emailPassBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.va
 
 onSnapshot(scoresDoc,s=>{
   if(!s.exists()) return;
-  houses.forEach(h=>document.getElementById("pts-"+h.id).textContent=s.data()[h.id]||0);
+  houses.forEach(h=>{
+    document.getElementById("pts-"+h.id).textContent=s.data()[h.id]||0;
+  });
 });
 
 onAuthStateChanged(auth, async u=>{
