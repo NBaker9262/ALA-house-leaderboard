@@ -148,11 +148,6 @@ houses.forEach(h=>{
   container.appendChild(c);
 });
 
-async function applyChange(house,delta){
-  const reason = document.getElementById("reasonInput")?.value || "Assembly";
-  await runTransaction(db, async t=>{
-    const snap = await t.get(scoresDoc);
-    const data = snap.data();
 
     t.update(scoresDoc,{
       [house]:(data[house]||0)+delta,
@@ -190,18 +185,7 @@ document.getElementById("undoBtn").onclick=async()=>{
     });
   });
 
-  // Log undo to sheet
-  fetch("WEB_APP_URL_HERE",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      house: la.house,
-      points: -la.delta,
-      reason: "Undo",
-      timestamp: new Date().toISOString()
-    })
-  }).catch(e=>console.error("Failed to log undo to sheet:",e));
-};
+
 
 document.getElementById("resetBtn").onclick=()=>setDoc(scoresDoc,{
   red:0,white:0,blue:0,silver:0,lastAction:null,_confetti:null
