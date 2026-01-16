@@ -156,18 +156,17 @@ async function applyChange(house,delta){
       timestamp: serverTimestamp(),
       adminUid: auth.currentUser.uid
   const reason = document.getElementById("reasonInput")?.value || "Assembly";
-
-fetch("https://script.google.com/a/macros/stu.alaschools.org/s/AKfycbzs9ednx7sHA2x4SDDvid1vKYDvLcgkei8IYe3ZKJ1bTsTrOYxmJqqf08GSEt_n72o4sA/exec", {
+ fetch("https://script.google.com/a/macros/stu.alaschools.org/s/AKfycbzs9ednx7sHA2x4SDDvid1vKYDvLcgkei8IYe3ZKJ1bTsTrOYxmJqqf08GSEt_n72o4sA/exec", {
   method: "POST",
-  headers: {"Content-Type":"application/json"},
-  body: JSON.stringify({
-    house,
-    points: delta,
-    reason,
-    timestamp: new Date().toISOString()
+   headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      house,
+      points: delta,
+      reason,
+      timestamp: new Date().toISOString()
+    })
   })
-})
-.catch(err => console.error("Failed to log to Sheet:", err));
+  .catch(err => console.error("Failed to log to Sheet:", err));
     });
   });
 }
