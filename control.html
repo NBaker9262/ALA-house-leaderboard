@@ -177,12 +177,16 @@ document.getElementById("resetBtn").onclick=()=>setDoc(scoresDoc,{
 document.getElementById("signOutBtn").onclick=()=>signOut(auth);
 emailPassBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value);
 
-onSnapshot(scoresDoc,s=>{
-  if(!s.exists()) return;
-  houses.forEach(h=>{
-    document.getElementById("pts-"+h.id).textContent=s.data()[h.id]||0;
+onSnapshot(scoresDoc, s => {
+  if (!s.exists()) return;
+
+  houses.forEach(h => {
+    const el = document.getElementById("pts-" + h.id);
+    if (!el) return; // prevents crash
+    el.textContent = s.data()[h.id] || 0;
   });
 });
+
 
 onAuthStateChanged(auth, async u=>{
   if(!u){loginBox.style.display="flex";mainPanel.style.display="none";return;}
