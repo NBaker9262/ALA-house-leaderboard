@@ -146,12 +146,13 @@ async function applyChange(house, delta){
 }
 
 
-document.getElementById("undoBtn").onclick=async()=>{
+document.getElementById("undoBtn").onclick = async () => {
   const reason = "Undo";
+
   await runTransaction(db, async t=>{
     const snap = await t.get(scoresDoc);
     const la = snap.data().lastAction;
-    if(!la) throw "Nothing to undo";
+    if(!la) return;
 
     t.update(scoresDoc,{
       [la.house]:(snap.data()[la.house]||0)-la.delta,
@@ -160,13 +161,13 @@ document.getElementById("undoBtn").onclick=async()=>{
 
     t.set(doc(historyCol),{
       house: la.house,
-      delta:-la.delta,
+      delta: -la.delta,
       reason,
-      timestamp:serverTimestamp(),
-      adminUid:auth.currentUser.uid
+      timestamp: serverTimestamp(),
+      adminUid: auth.currentUser.uid
     });
   });
-
+};
 
 
 document.getElementById("resetBtn").onclick=()=>setDoc(scoresDoc,{
