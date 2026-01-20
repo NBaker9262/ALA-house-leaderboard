@@ -17,12 +17,21 @@ h2{margin:0 0 12px}
 .house-name{font-weight:700;margin-bottom:10px;padding:6px 10px;border-radius:6px}
 .points{font-size:32px;font-weight:700;margin-bottom:10px}
 
-.controls{display:flex;gap:8px;flex-wrap:wrap}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
 .add{background:#2d9cdb;color:#fff}
 .sub{background:#555;color:#fff}
 .danger{background:#e74c3c;color:#fff}
 .small{background:#eee}
+
+.custom{display:flex;gap:6px;align-items:center}
+.custom input{
+  width:80px;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-weight:600;
+}
 
 .login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
 .login input{padding:10px;width:220px;border-radius:8px;border:1px solid #ccc}
@@ -98,7 +107,9 @@ houses.forEach(h=>{
     <div class="house-name" style="background:${h.bg};color:${h.text}">
       ${h.name}
     </div>
+
     <div class="points" id="pts-${h.id}">0</div>
+
     <div class="controls">
       <button class="sub" onclick="window.apply('${h.id}',-10)">-10</button>
       <button class="sub" onclick="window.apply('${h.id}',-20)">-20</button>
@@ -106,12 +117,18 @@ houses.forEach(h=>{
       <button class="add" onclick="window.apply('${h.id}',10)">+10</button>
       <button class="add" onclick="window.apply('${h.id}',20)">+20</button>
       <button class="add" onclick="window.apply('${h.id}',50)">+50</button>
+
+      <div class="custom">
+        <input id="custom-${h.id}" type="number" placeholder="Custom">
+        <button class="add" onclick="window.applyCustom('${h.id}',1)">Add</button>
+        <button class="sub" onclick="window.applyCustom('${h.id}',-1)">Sub</button>
+      </div>
     </div>
   `;
   container.appendChild(card);
 });
 
-/* point change */
+/* fixed buttons */
 async function applyChange(house,delta){
   await runTransaction(db,async t=>{
     const snap=await t.get(scoresDoc);
@@ -123,6 +140,15 @@ async function applyChange(house,delta){
   });
 }
 window.apply=applyChange;
+
+/* custom input */
+window.applyCustom = async (house,dir)=>{
+  const input=document.getElementById("custom-"+house);
+  const val=parseInt(input.value,10);
+  if(isNaN(val) || val===0) return;
+  await applyChange(house,val*dir);
+  input.value="";
+};
 
 /* undo */
 document.getElementById("undoBtn").onclick=async()=>{
@@ -143,11 +169,12 @@ document.getElementById("resetBtn").onclick=()=>{
 };
 
 /* auth */
-document.getElementById("emailPassBtn").onclick=()=>{
+emailPassBtn.onclick=()=>{
   signInWithEmailAndPassword(auth,email.value,password.value);
 };
-document.getElementById("signOutBtn").onclick=()=>signOut(auth);
+signOutBtn.onclick=()=>signOut(auth);
 
+/* live updates */
 onSnapshot(scoresDoc,s=>{
   if(!s.exists()) return;
   houses.forEach(h=>{
@@ -156,10 +183,18 @@ onSnapshot(scoresDoc,s=>{
   });
 });
 
+/* auth state */
 onAuthStateChanged(auth,async u=>{
-  if(!u){loginBox.style.display="flex";mainPanel.style.display="none";return;}
+  if(!u){
+    loginBox.style.display="flex";
+    mainPanel.style.display="none";
+    return;
+  }
   const t=await u.getIdTokenResult();
-  if(!t.claims.admin){await signOut(auth);return;}
+  if(!t.claims.admin){
+    await signOut(auth);
+    return;
+  }
   loginBox.style.display="none";
   mainPanel.style.display="block";
   loggedInAs.textContent=u.email;
