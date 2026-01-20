@@ -14,8 +14,6 @@
 
 :root {
   --bg: #c4a484;
-  --grid: rgba(0,0,0,0.08);
-  --max-points: 600;
 }
 
 html, body {
@@ -23,74 +21,48 @@ html, body {
   margin: 0;
   background: var(--bg);
   font-family: Arial, sans-serif;
-  overflow: hidden; /* prevents scrolling */
+  overflow: hidden;
 }
 
 .wrap {
-  height: 100vh;          /* fill whole viewport */
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  box-sizing: border-box;
   padding: 20px 40px;
+  box-sizing: border-box;
 }
 
 header {
   text-align: center;
-  flex: 0 0 auto;
 }
 
 h1 {
   font-family: 'AvallonCaps', Arial, sans-serif;
   font-size: clamp(48px, 6vw, 90px);
   margin: 0;
-  color: #000;
   text-transform: uppercase;
-  letter-spacing: 2px;
 }
 
 .chart-area {
-  flex: 1 1 auto;
+  flex: 1;
   display: flex;
-  align-items: flex-end;         /* bars at bottom */
+  align-items: flex-end;
   justify-content: space-around;
   position: relative;
-  padding: 0;                    /* no extra space */
 }
-
-.y-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.y-grid .line {
-  height: 1px;
-  background: var(--grid);
-  position: absolute;
-  left: 0;
-  right: 0;
-}
-.y-grid .line.l0  { top: 0% }
-.y-grid .line.l1  { top: 25% }
-.y-grid .line.l2  { top: 50% }
-.y-grid .line.l3  { top: 75% }
 
 .bar {
-  flex: 1 1 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  position: relative;
 }
 
 .house-icon {
   width: 120px;
-  height: auto;
-  object-fit: contain;
   margin-bottom: 10px;
-  transition: margin-bottom 0.9s cubic-bezier(.2,.9,.2,1);
+  transition: margin-bottom 0.8s;
 }
 
 .bar-inner {
@@ -100,55 +72,40 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: height 900ms cubic-bezier(.2,.9,.2,1), background-color 400ms;
-  box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
-  position: relative;
+  font-size: clamp(22px, 3vw, 40px);
   font-weight: bold;
-  font-size: clamp(22px, 3.2vw, 40px);
+  transition: height 0.8s;
 }
 
-.red { background: #ea0125; color:#fff; }
-.white { background: #fffeff; color:#000; }
-.blue { background: #005ab5; color:#fff; }
-.silver { background: #a7a7aa; color:#000; }
-
-@media(min-width: 1000px) {
-  .house-icon { width: 130px; }
-}
+.red { background:#ea0125;color:#fff; }
+.white { background:#fffeff;color:#000; }
+.blue { background:#005ab5;color:#fff; }
+.silver { background:#a7a7aa;color:#000; }
 </style>
 </head>
+
 <body>
 <div class="wrap">
   <header>
     <h1>House Points Leaderboard</h1>
   </header>
 
-  <div class="chart-area" id="chart">
-    <div class="y-grid" aria-hidden="true">
-      <div class="line l0"></div>
-      <div class="line l1"></div>
-      <div class="line l2"></div>
-      <div class="line l3"></div>
-    </div>
-
+  <div class="chart-area">
     <div class="bar">
-      <img class="house-icon" id="icon-red" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/refs/heads/main/Panda%20%20(blank%20background).png" alt="Red House">
-      <div class="bar-inner red" id="bar-red"><div class="score-label" id="score-red">0</div></div>
+      <img id="icon-red" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Panda%20%20(blank%20background).png">
+      <div id="bar-red" class="bar-inner red"><span id="score-red">0</span></div>
     </div>
-
     <div class="bar">
-      <img class="house-icon" id="icon-white" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/refs/heads/main/Polar%20%20(blank%20background).png" alt="White House">
-      <div class="bar-inner white" id="bar-white"><div class="score-label" id="score-white">0</div></div>
+      <img id="icon-white" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Polar%20%20(blank%20background).png">
+      <div id="bar-white" class="bar-inner white"><span id="score-white">0</span></div>
     </div>
-
     <div class="bar">
-      <img class="house-icon" id="icon-blue" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/refs/heads/main/Grizzly%20%20(blank%20background).png" alt="Blue House">
-      <div class="bar-inner blue" id="bar-blue"><div class="score-label" id="score-blue">0</div></div>
+      <img id="icon-blue" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Grizzly%20%20(blank%20background).png">
+      <div id="bar-blue" class="bar-inner blue"><span id="score-blue">0</span></div>
     </div>
-
     <div class="bar">
-      <img class="house-icon" id="icon-silver" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/refs/heads/main/Kodiak%20%20(blank%20background).png" alt="Silver House">
-      <div class="bar-inner silver" id="bar-silver"><div class="score-label" id="score-silver">0</div></div>
+      <img id="icon-silver" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Kodiak%20%20(blank%20background).png">
+      <div id="bar-silver" class="bar-inner silver"><span id="score-silver">0</span></div>
     </div>
   </div>
 </div>
@@ -156,78 +113,86 @@ h1 {
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
-    authDomain: "ala-house-leaderboard.firebaseapp.com",
-    projectId: "ala-house-leaderboard",
-    storageBucket: "ala-house-leaderboard.firebasestorage.app",
-    messagingSenderId: "827317744881",
-    appId: "1:827317744881:web:c8518ba6523610ab006550",
-    measurementId: "G-W47XZ87CQE"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
+  authDomain: "ala-house-leaderboard.firebaseapp.com",
+  projectId: "ala-house-leaderboard",
+  storageBucket: "ala-house-leaderboard.firebasestorage.app",
+  messagingSenderId: "827317744881",
+  appId: "1:827317744881:web:c8518ba6523610ab006550"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const scoresDoc = doc(db, "leaderboard", "scores");
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const scoresDoc = doc(db, "leaderboard", "scores");
 
-  const bars = {
-    red: document.getElementById('bar-red'),
-    white: document.getElementById('bar-white'),
-    blue: document.getElementById('bar-blue'),
-    silver: document.getElementById('bar-silver'),
-  };
-  const labels = {
-    red: document.getElementById('score-red'),
-    white: document.getElementById('score-white'),
-    blue: document.getElementById('score-blue'),
-    silver: document.getElementById('score-silver'),
-  };
-  const icons = {
-    red: document.getElementById('icon-red'),
-    white: document.getElementById('icon-white'),
-    blue: document.getElementById('icon-blue'),
-    silver: document.getElementById('icon-silver'),
-  };
+const bars = {
+  red: document.getElementById("bar-red"),
+  white: document.getElementById("bar-white"),
+  blue: document.getElementById("bar-blue"),
+  silver: document.getElementById("bar-silver")
+};
+const labels = {
+  red: document.getElementById("score-red"),
+  white: document.getElementById("score-white"),
+  blue: document.getElementById("score-blue"),
+  silver: document.getElementById("score-silver")
+};
+const icons = {
+  red: document.getElementById("icon-red"),
+  white: document.getElementById("icon-white"),
+  blue: document.getElementById("icon-blue"),
+  silver: document.getElementById("icon-silver")
+};
 
-  function setDynamicHeights(values) {
-    const maxVal = Math.max(...Object.values(values), 1);
-    for (const k in bars) {
-      const val = values[k] ?? 0;
-      const ratio = val / maxVal;
-      const heightVH = 15 + ratio * 45;
-      bars[k].style.height = heightVH + 'vh';
-      icons[k].style.marginBottom = `calc(${heightVH}vh * 0.05 + 10px)`;
-    }
+let lastConfettiHouse = null;
+
+function updateHeights(values) {
+  const max = Math.max(...Object.values(values), 1);
+  for (const k in bars) {
+    const h = 15 + (values[k] / max) * 45;
+    bars[k].style.height = h + "vh";
+    icons[k].style.marginBottom = `calc(${h}vh * 0.05 + 10px)`;
   }
+}
 
-  function updateUI(payload) {
-    const vals = {
-      red: payload.red ?? 0,
-      white: payload.white ?? 0,
-      blue: payload.blue ?? 0,
-      silver: payload.silver ?? 0
-    };
+onSnapshot(scoresDoc, async snap => {
+  if (!snap.exists()) return;
+  const d = snap.data();
 
-    for (const k in vals) labels[k].textContent = vals[k];
-    setDynamicHeights(vals);
-  }
+  const values = {
+    red: d.red ?? 0,
+    white: d.white ?? 0,
+    blue: d.blue ?? 0,
+    silver: d.silver ?? 0
+  };
 
-  onSnapshot(scoresDoc, (snap) => {
-    if (!snap.exists()) return;
-    const data = snap.data();
-    updateUI(data);
+  for (const k in values) labels[k].textContent = values[k];
+  updateHeights(values);
 
-    if (data._confetti && data._confetti.house) {
-      const colorMap = { red:'#ea0125', white:'#fffeff', blue:'#005ab5', silver:'#a7a7aa' };
-      const color = colorMap[data._confetti.house] || '#ffffff';
-      confetti({ particleCount: 100, spread: 60, origin: { y: 0.6 }, colors: [color] });
-      confetti({ particleCount: 60, spread: 55, origin: { x: 0, y: 0.8 }, colors: [color], angle: 60 });
-      confetti({ particleCount: 60, spread: 55, origin: { x: 1, y: 0.8 }, colors: [color], angle: 120 });
-    }
-  });
+  const house = d._confetti?.house;
+  if (!house || house === lastConfettiHouse) return;
+
+  lastConfettiHouse = house;
+
+  const colorMap = {
+    red: "#ea0125",
+    white: "#fffeff",
+    blue: "#005ab5",
+    silver: "#a7a7aa"
+  };
+
+  const color = colorMap[house];
+
+  confetti({ particleCount: 120, spread: 60, origin: { y: 0.6 }, colors: [color] });
+  confetti({ particleCount: 60, spread: 55, origin: { x: 0, y: 0.8 }, angle: 60, colors: [color] });
+  confetti({ particleCount: 60, spread: 55, origin: { x: 1, y: 0.8 }, angle: 120, colors: [color] });
+
+  await updateDoc(scoresDoc, { _confetti: null });
+});
 </script>
 </body>
 </html>
