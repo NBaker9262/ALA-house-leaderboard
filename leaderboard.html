@@ -28,17 +28,19 @@ html, body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 20px 40px;
+  padding: clamp(10px, 2vw, 40px);
   box-sizing: border-box;
+  gap: 10px;
 }
 
 header {
   text-align: center;
+  flex-shrink: 0;
 }
 
 h1 {
   font-family: 'AvallonCaps', Arial, sans-serif;
-  font-size: clamp(48px, 6vw, 90px);
+  font-size: clamp(28px, 5vw, 90px);
   margin: 0;
   text-transform: uppercase;
 }
@@ -49,6 +51,7 @@ h1 {
   align-items: flex-end;
   justify-content: space-around;
   position: relative;
+  min-height: 0;
 }
 
 .bar {
@@ -57,22 +60,23 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .house-icon {
-  width: 120px;
+  width: clamp(60px, 15vw, 120px);
   margin-bottom: 10px;
   transition: margin-bottom 0.8s;
 }
 
 .bar-inner {
-  width: 80%;
-  border-radius: 25px;
-  min-height: 15vh;
+  width: 90%;
+  border-radius: 15px;
+  min-height: clamp(40px, 8vh, 200px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(22px, 3vw, 40px);
+  font-size: clamp(16px, 2.5vw, 40px);
   font-weight: bold;
   transition: height 0.8s;
 }
@@ -82,28 +86,25 @@ h1 {
 .blue { background:#005ab5;color:#fff; }
 .silver { background:#a7a7aa;color:#000; }
 
-/* Mobile/Tablet responsive layout */
-@media (max-width: 768px) {
-  .chart-area {
-    flex-direction: column;
-    justify-content: center;
+/* Ensure landscape on mobile */
+@media (max-height: 500px) {
+  .wrap {
+    padding: clamp(5px, 1vw, 20px);
+    gap: 5px;
   }
   
-  .bar {
-    flex-direction: row;
-    margin-bottom: 20px;
+  h1 {
+    font-size: clamp(20px, 4vw, 60px);
   }
   
   .house-icon {
-    width: 80px;
-    margin-bottom: 0;
-    margin-right: 15px;
+    width: clamp(50px, 12vw, 80px);
+    margin-bottom: 5px;
   }
   
   .bar-inner {
-    width: 150px;
-    min-height: unset;
-    height: 50px;
+    font-size: clamp(12px, 2vw, 30px);
+    min-height: clamp(30px, 6vh, 100px);
   }
 }
 </style>
