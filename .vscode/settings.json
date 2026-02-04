@@ -1,0 +1,10 @@
+{
+    "emeraldwalk.runonsave": {
+        "commands": [
+            {
+                "match": ".*\\.(html|js|css|json|py)$",
+                "cmd": "bash ${workspaceFolder}/.vscode/git-auto-commit.sh ${file}"
+            }
+        ]
+    }
+}
