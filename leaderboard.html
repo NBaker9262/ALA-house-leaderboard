@@ -54,7 +54,7 @@ h1 {
   justify-content: space-around;
   position: relative;
   min-height: 0;
-  max-height: calc(100vh - 180px);
+  padding-top: clamp(10px, 2vh, 20px);
 }
 
 .bar {
@@ -64,24 +64,28 @@ h1 {
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
+  max-height: 100%;
 }
 
 .house-icon {
-  width: clamp(60px, 15vw, 120px);
-  margin-bottom: 10px;
+  width: clamp(60px, 12vw, 100px);
+  margin-bottom: clamp(5px, 1vh, 15px);
   transition: margin-bottom 0.8s;
+  flex-shrink: 0;
 }
 
 .bar-inner {
   width: 90%;
   border-radius: 15px;
-  min-height: clamp(40px, 8vh, 200px);
+  min-height: clamp(40px, 6vh, 150px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(16px, 2.5vw, 40px);
+  font-size: clamp(16px, 2vw, 36px);
   font-weight: bold;
   transition: height 0.8s;
+  flex-shrink: 1;
+  max-height: calc(70vh - 150px);
 }
 
 .red { background:#ea0125;color:#fff; }
