@@ -81,6 +81,31 @@ h1 {
 .white { background:#fffeff;color:#000; }
 .blue { background:#005ab5;color:#fff; }
 .silver { background:#a7a7aa;color:#000; }
+
+/* Mobile/Tablet responsive layout */
+@media (max-width: 768px) {
+  .chart-area {
+    flex-direction: column;
+    justify-content: center;
+  }
+  
+  .bar {
+    flex-direction: row;
+    margin-bottom: 20px;
+  }
+  
+  .house-icon {
+    width: 80px;
+    margin-bottom: 0;
+    margin-right: 15px;
+  }
+  
+  .bar-inner {
+    width: 150px;
+    min-height: unset;
+    height: 50px;
+  }
+}
 </style>
 </head>
 
