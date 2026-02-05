@@ -55,22 +55,34 @@ h1 {
   position: relative;
   min-height: 0;
   padding-top: clamp(10px, 2vh, 20px);
-  background-image: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.1) 1px,
-    transparent 1px,
-    transparent 10vh
-  );
 }
 
+.y-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.y-grid .line {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.y-grid .line.l0 { top: 0 }
+.y-grid .line.l1 { top: 25% }
+.y-grid .line.l2 { top: 50% }
+.y-grid .line.l3 { top: 75% }
+
 .bar {
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  min-width: 0;
-  max-height: 100%;
+  position: relative;
 }
 
 .house-icon {
