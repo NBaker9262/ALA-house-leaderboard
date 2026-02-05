@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>House Points Leaderboard</title>
+
 <style>
 @font-face {
   font-family: 'AvallonCaps';
@@ -91,7 +92,7 @@ h1 {
   justify-content: flex-end;
   max-height: 55vh;
   min-height: 15vh;
-  width: 100%;
+  overflow: hidden;
 }
 
 .house-icon {
@@ -102,7 +103,7 @@ h1 {
 }
 
 .bar-inner {
-  width: 80%;
+  width: 100%;
   border-radius: 28px;
   min-height: 15vh;
   display: flex;
@@ -112,6 +113,7 @@ h1 {
   font-weight: bold;
   transition: height 900ms cubic-bezier(.2,.9,.2,1);
   box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
+  flex-grow: 1;
 }
 
 .red { background:#ea0125;color:#fff; }
