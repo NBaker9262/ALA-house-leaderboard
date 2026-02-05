@@ -6,5 +6,6 @@
                 "cmd": "bash ${workspaceFolder}/.vscode/git-auto-commit.sh ${file}"
             }
         ]
-    }
+    },
+    "liveServer.settings.port": 5501
 }
