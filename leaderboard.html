@@ -93,17 +93,16 @@ h1 {
 }
 
 .bar-inner {
-  width: 67%;
-  border-radius: 26px;
-  min-height: clamp(40px, 6vh, 150px);
+  width: 80%;
+  border-radius: 25px;
+  min-height: 15vh;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: clamp(16px, 2vw, 36px);
   font-weight: bold;
-  transition: height 0.8s;
-  flex-shrink: 1;
-  max-height: calc(70vh - 150px);
+  transition: height 900ms cubic-bezier(.2,.9,.2,1);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
 }
 
 .red { background:#ea0125;color:#fff; }
