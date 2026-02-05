@@ -186,7 +186,7 @@ let lastConfettiHouse = null;
 function updateHeights(values) {
   const max = Math.max(...Object.values(values), 1);
   for (const k in bars) {
-    const h = 15 + (values[k] / max) * 45;
+    const h = 5 + (values[k] / max) * 65;
     bars[k].style.height = h + "vh";
     icons[k].style.marginBottom = `calc(${h}vh * 0.05 + 10px)`;
   }
