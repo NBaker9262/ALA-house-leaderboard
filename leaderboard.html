@@ -85,6 +85,16 @@ h1 {
   position: relative;
 }
 
+.bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  max-height: 55vh;
+  min-height: 15vh;
+  overflow: hidden;
+}
+
 .house-icon {
   width: clamp(60px, 12vw, 100px);
   margin-bottom: clamp(5px, 1vh, 15px);
@@ -96,7 +106,6 @@ h1 {
   width: 67%;
   border-radius: 28px;
   min-height: 15vh;
-  max-height: 55vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -104,6 +113,7 @@ h1 {
   font-weight: bold;
   transition: height 900ms cubic-bezier(.2,.9,.2,1);
   box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
+  flex-grow: 1;
 }
 
 .red { background:#ea0125;color:#fff; }
@@ -150,20 +160,28 @@ h1 {
     </div>
     
     <div class="bar">
-      <img id="icon-red" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Panda%20%20(blank%20background).png">
-      <div id="bar-red" class="bar-inner red"><span id="score-red">0</span></div>
+      <div class="bar-container">
+        <img id="icon-red" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Panda%20%20(blank%20background).png">
+        <div id="bar-red" class="bar-inner red"><span id="score-red">0</span></div>
+      </div>
     </div>
     <div class="bar">
-      <img id="icon-white" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Polar%20%20(blank%20background).png">
-      <div id="bar-white" class="bar-inner white"><span id="score-white">0</span></div>
+      <div class="bar-container">
+        <img id="icon-white" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Polar%20%20(blank%20background).png">
+        <div id="bar-white" class="bar-inner white"><span id="score-white">0</span></div>
+      </div>
     </div>
     <div class="bar">
-      <img id="icon-blue" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Grizzly%20%20(blank%20background).png">
-      <div id="bar-blue" class="bar-inner blue"><span id="score-blue">0</span></div>
+      <div class="bar-container">
+        <img id="icon-blue" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Grizzly%20%20(blank%20background).png">
+        <div id="bar-blue" class="bar-inner blue"><span id="score-blue">0</span></div>
+      </div>
     </div>
     <div class="bar">
-      <img id="icon-silver" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Kodiak%20%20(blank%20background).png">
-      <div id="bar-silver" class="bar-inner silver"><span id="score-silver">0</span></div>
+      <div class="bar-container">
+        <img id="icon-silver" class="house-icon" src="https://raw.githubusercontent.com/NBaker9262/ALA-house-leaderboard/main/Kodiak%20%20(blank%20background).png">
+        <div id="bar-silver" class="bar-inner silver"><span id="score-silver">0</span></div>
+      </div>
     </div>
   </div>
 </div>
