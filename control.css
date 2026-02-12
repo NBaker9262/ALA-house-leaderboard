@@ -1,0 +1,31 @@
+body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f6f6;color:#111;padding:28px;}
+.wrap{max-width:980px;margin:0 auto;display:none;}
+h2{margin:0 0 12px}
+
+.houses{display:flex;gap:14px;flex-wrap:wrap;}
+.card{flex:1 1 45%;background:#f9f5f5;border-radius:12px;padding:14px;box-shadow:0 6px 18px rgba(0,0,0,0.19)}
+.house-name{font-weight:700;margin-bottom:10px;padding:6px 10px;border-radius:6px}
+.points{font-size:32px;font-weight:700;margin-bottom:10px}
+
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+.add{background:#2d9cdb;color:#fff}
+.sub{background:#555;color:#fff}
+.danger{background:#e74c3c;color:#fff}
+.small{background:#eee}
+
+.custom{display:flex;gap:6px;align-items:center}
+.custom input{
+  width:80px;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-weight:600;
+}
+
+.login{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;}
+.login input{padding:10px;width:220px;border-radius:8px;border:1px solid #ccc}
+.login button{padding:10px 16px;border-radius:8px;border:0;background:#2d9cdb;color:#fff;font-weight:600}
+
+.meta{margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.muted{font-size:13px;color:#666}

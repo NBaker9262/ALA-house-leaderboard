@@ -1,0 +1,138 @@
+@font-face {
+  font-family: 'AvallonCaps';
+  src: url('https://cdn.jsdelivr.net/gh/NBaker9262/ALA-house-leaderboard/Avallon%20All%20Caps.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --bg: #c4a484;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+.wrap {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+header {
+  text-align: center;
+  flex-shrink: 0;
+  margin-bottom: clamp(20px, 5vh, 60px);
+  min-height: auto;
+}
+
+h1 {
+  font-family: 'AvallonCaps', Arial, sans-serif;
+  font-size: clamp(36px, 8vw, 120px);
+  margin: 0;
+  text-transform: uppercase;
+  padding: clamp(10px, 2vh, 20px) 0;
+}
+
+.chart-area {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  position: relative;
+  min-height: 0;
+  padding-top: clamp(10px, 2vh, 20px);
+}
+
+.y-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.y-grid .line {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.y-grid .line.l0 { top: 0 }
+.y-grid .line.l1 { top: 25% }
+.y-grid .line.l2 { top: 50% }
+.y-grid .line.l3 { top: 75% }
+
+.bar {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  flex: 1;
+  max-height: 80vh;
+}
+
+.house-icon {
+  width: clamp(60px, 12vw, 100px);
+  margin-bottom: clamp(5px, 1vh, 15px);
+  transition: margin-bottom 0.8s;
+  flex-shrink: 0;
+}
+
+.bar-inner {
+  width: clamp(60px, 15vw, 180px);
+  border-radius: 28px 28px 0px 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(16px, 2vw, 36px);
+  font-weight: bold;
+  transition: height 900ms cubic-bezier(.2,.9,.2,1);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
+}
+
+.red { background:#ea0125;color:#fff; }
+.white { background:#fffeff;color:#000; }
+.blue { background:#005ab5;color:#fff; }
+.silver { background:#a7a7aa;color:#000; }
+
+/* Ensure landscape on mobile */
+@media (max-height: 500px) {
+  .wrap {
+    padding: clamp(5px, 1vw, 20px);
+    gap: 5px;
+  }
+  
+  h1 {
+    font-size: clamp(28px, 6vw, 80px);
+  }
+  
+  .chart-area {
+    padding-top: clamp(10px, 5vw, 40px);
+  }
+  
+  .house-icon {
+    width: clamp(50px, 12vw, 80px);
+    margin-bottom: 5px;
+  }
+  
+  .bar-inner {
+    font-size: clamp(12px, 2vw, 30px);
+    min-height: clamp(30px, 6vh, 100px);
+    min-width: clamp(50px, 12vh, 150px);
+  }
+}
