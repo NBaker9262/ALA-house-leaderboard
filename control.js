@@ -45,10 +45,14 @@ houses.forEach(h=>{
 
     <div class="controls">
       <button class="sub" onclick="window.apply('${h.id}',-10)">-10</button>
+      <button class="sub" onclick="window.apply('${h.id}',-15)">-15</button>
       <button class="sub" onclick="window.apply('${h.id}',-20)">-20</button>
+      <button class="sub" onclick="window.apply('${h.id}',-30)">-30</button>
       <button class="sub" onclick="window.apply('${h.id}',-50)">-50</button>
       <button class="add" onclick="window.apply('${h.id}',10)">+10</button>
+      <button class="add" onclick="window.apply('${h.id}',15)">+15</button>
       <button class="add" onclick="window.apply('${h.id}',20)">+20</button>
+      <button class="add" onclick="window.apply('${h.id}',30)">+30</button>
       <button class="add" onclick="window.apply('${h.id}',50)">+50</button>
 
       <div class="custom">
