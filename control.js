@@ -41,24 +41,29 @@ houses.forEach(h=>{
       ${h.name}
     </div>
 
+    <div class="custom-row">
+      <input id="custom-${h.id}" type="number" placeholder="Custom amount">
+      <button class="add" onclick="window.applyCustom('${h.id}',1)">Add</button>
+      <button class="sub" onclick="window.applyCustom('${h.id}',-1)">Sub</button>
+    </div>
+
     <div class="points" id="pts-${h.id}">0</div>
 
     <div class="controls">
-      <button class="sub" onclick="window.apply('${h.id}',-10)">-10</button>
-      <button class="sub" onclick="window.apply('${h.id}',-15)">-15</button>
-      <button class="sub" onclick="window.apply('${h.id}',-20)">-20</button>
-      <button class="sub" onclick="window.apply('${h.id}',-30)">-30</button>
-      <button class="sub" onclick="window.apply('${h.id}',-50)">-50</button>
+      <div class="button-row add-row">
       <button class="add" onclick="window.apply('${h.id}',10)">+10</button>
       <button class="add" onclick="window.apply('${h.id}',15)">+15</button>
       <button class="add" onclick="window.apply('${h.id}',20)">+20</button>
       <button class="add" onclick="window.apply('${h.id}',30)">+30</button>
       <button class="add" onclick="window.apply('${h.id}',50)">+50</button>
+      </div>
 
-      <div class="custom">
-        <input id="custom-${h.id}" type="number" placeholder="Custom">
-        <button class="add" onclick="window.applyCustom('${h.id}',1)">Add</button>
-        <button class="sub" onclick="window.applyCustom('${h.id}',-1)">Sub</button>
+      <div class="button-row sub-row">
+        <button class="sub" onclick="window.apply('${h.id}',-10)">-10</button>
+        <button class="sub" onclick="window.apply('${h.id}',-15)">-15</button>
+        <button class="sub" onclick="window.apply('${h.id}',-20)">-20</button>
+        <button class="sub" onclick="window.apply('${h.id}',-30)">-30</button>
+        <button class="sub" onclick="window.apply('${h.id}',-50)">-50</button>
       </div>
     </div>
   `;
