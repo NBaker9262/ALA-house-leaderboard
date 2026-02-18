@@ -6,6 +6,7 @@
 
 :root {
   --bg: #c4a484;
+  --max-bar-vh: 150;
 }
 
 html, body {
@@ -87,7 +88,7 @@ h1 {
   justify-content: flex-end;
   overflow: hidden;
   flex: 1;
-  max-height: 80vh;
+  height: 80vh;
 }
 
 .house-icon {
@@ -138,5 +139,71 @@ h1 {
     font-size: clamp(12px, 2vw, 30px);
     min-height: clamp(30px, 6vh, 100px);
     min-width: clamp(50px, 12vh, 150px);
+  }
+}
+
+@media (max-width: 460px) {
+  :root {
+    --max-bar-vh: 72;
+  }
+
+  html,
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vh;
+    height: 100vw;
+    transform-origin: top left;
+    transform: rotate(90deg) translateY(-100%);
+    padding: 0;
+  }
+
+  header {
+    margin-bottom: clamp(8px, 2vh, 16px);
+  }
+
+  h1 {
+    font-size: clamp(20px, 5vw, 40px);
+    padding: clamp(4px, 1vh, 10px) 0;
+  }
+
+  .chart-area {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-around;
+    padding-top: clamp(6px, 2vh, 14px);
+  }
+
+  .bar {
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: flex-end;
+    margin-bottom: 0;
+  }
+
+  .bar-container {
+    flex-direction: column;
+    max-height: 75vh;
+    gap: 0;
+  }
+
+  .house-icon {
+    width: clamp(34px, 9vw, 52px);
+    margin-bottom: 4px;
+  }
+
+  .bar-inner {
+    width: clamp(56px, 11vw, 100px);
+    min-width: 0;
+    min-height: clamp(26px, 6vh, 46px);
+    font-size: clamp(11px, 2.8vw, 18px);
+    border-radius: 12px 12px 0 0;
   }
 }

@@ -13,7 +13,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const scoresDoc = doc(db, "leaderboard", "scores");
-
 const bars = {
   red: document.getElementById("bar-red"),
   white: document.getElementById("bar-white"),
@@ -40,17 +39,30 @@ const EFFECT_TIMING = {
   confettiDelayMs: 0
 };
 
+function getMaxBarVh() {
+  const value = getComputedStyle(document.documentElement).getPropertyValue("--max-bar-vh");
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 150;
+}
+
 function updateHeights(values) {
-  const total = Object.values(values).reduce((sum, v) => sum + v, 0);
-  const maxBarVh = 150;
+  const max = Math.max(...Object.values(values));
+  const chartArea = document.querySelector(".chart-area");
+  const usableHeight = chartArea.clientHeight * 0.9; // leave headroom
 
   for (const k in bars) {
-    const ratio = total === 0 ? 0 : values[k] / total;
-    const h = ratio * maxBarVh;
-    bars[k].style.height = h + "vh";
-    icons[k].style.marginBottom = `calc(${h}vh * 0.05 + 10px)`;
+    const ratio = max === 0 ? 0 : values[k] / max;
+    const h = ratio * usableHeight;
+    bars[k].style.height = h + "px";
   }
 }
+
+
+
+
+window.addEventListener("resize", () => {
+  if (lastValues) updateHeights(lastValues);
+});
 
 onSnapshot(scoresDoc, snap => {
   if (!snap.exists()) return;
