@@ -98,7 +98,7 @@ h1 {
 }
 
 .bar-inner {
-  width: clamp(60px, 15vw, 180px);
+  width: clamp(90px, 15vw, 210px);
   border-radius: 28px 28px 0px 0px;
   display: flex;
   align-items: center;
