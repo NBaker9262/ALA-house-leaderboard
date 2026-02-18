@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
@@ -34,6 +34,11 @@ const icons = {
 };
 
 let lastConfettiHouse = null;
+let lastValues = null;
+
+const EFFECT_TIMING = {
+  confettiDelayMs: 0
+};
 
 function updateHeights(values) {
   const total = Object.values(values).reduce((sum, v) => sum + v, 0);
@@ -47,7 +52,7 @@ function updateHeights(values) {
   }
 }
 
-onSnapshot(scoresDoc, async snap => {
+onSnapshot(scoresDoc, snap => {
   if (!snap.exists()) return;
   const d = snap.data();
 
@@ -61,8 +66,27 @@ onSnapshot(scoresDoc, async snap => {
   for (const k in values) labels[k].textContent = values[k];
   updateHeights(values);
 
-  const house = d._confetti?.house;
-  if (!house || house === lastConfettiHouse) return;
+  if (!lastValues) {
+    lastValues = { ...values };
+    return;
+  }
+
+  const deltas = Object.keys(values).map(house => ({
+    house,
+    delta: values[house] - (lastValues[house] ?? 0)
+  }));
+
+  const biggestChange = deltas.reduce((best, current) => {
+    if (!best || Math.abs(current.delta) > Math.abs(best.delta)) return current;
+    return best;
+  }, null);
+
+  lastValues = { ...values };
+
+  if (!biggestChange || biggestChange.delta <= 0) return;
+
+  const house = biggestChange.house;
+  if (house === lastConfettiHouse && Math.abs(biggestChange.delta) < 1) return;
 
   lastConfettiHouse = house;
 
@@ -75,9 +99,9 @@ onSnapshot(scoresDoc, async snap => {
 
   const color = colorMap[house];
 
-  confetti({ particleCount: 120, spread: 60, origin: { y: 0.6 }, colors: [color] });
-  confetti({ particleCount: 60, spread: 55, origin: { x: 0, y: 0.8 }, angle: 60, colors: [color] });
-  confetti({ particleCount: 60, spread: 55, origin: { x: 1, y: 0.8 }, angle: 120, colors: [color] });
-
-  await updateDoc(scoresDoc, { _confetti: null });
+  setTimeout(() => {
+    confetti({ particleCount: 120, spread: 60, origin: { y: 0.6 }, colors: [color] });
+    confetti({ particleCount: 60, spread: 55, origin: { x: 0, y: 0.8 }, angle: 60, colors: [color] });
+    confetti({ particleCount: 60, spread: 55, origin: { x: 1, y: 0.8 }, angle: 120, colors: [color] });
+  }, EFFECT_TIMING.confettiDelayMs);
 });

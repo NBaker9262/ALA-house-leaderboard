@@ -62,14 +62,14 @@ h1 {
   right: 0;
 }
 
-.y-grid .line.l0 { top: 0 }
+.y-grid .line.l2 { top: 0 }
 .y-grid .line.l1 { top: 12.5% }
-.y-grid .line.l2 { top: 25% }
-.y-grid .line.l3 { top: 37.5% }
-.y-grid .line.l4 { top: 50% }
-.y-grid .line.l5 { top: 62.5% }
-.y-grid .line.l6 { top: 75% }
-.y-grid .line.l7 { top: 87.5% }
+.y-grid .line.l3 { top: 25% }
+.y-grid .line.l4 { top: 37.5% }
+.y-grid .line.l5 { top: 50% }
+.y-grid .line.l6 { top: 62.5% }
+.y-grid .line.l7 { top: 75% }
+.y-grid .line.l8 { top: 87.5% }
 
 .bar {
   flex: 1 1 0;
