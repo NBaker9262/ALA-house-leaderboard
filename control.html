@@ -23,13 +23,36 @@
 
   <div class="houses" id="housesContainer"></div>
 
+  <!-- Place Awards Panel -->
+  <div class="place-awards" id="placePanel">
+    <div class="place-awards-header">
+      <h3>🏆 Award Place Points</h3>
+      <span class="place-hint" id="placeHint"></span>
+    </div>
+    <div class="place-rows" id="placeRows"></div>
+    <div id="placePreview" class="place-preview"></div>
+    <div class="place-actions">
+      <button class="small" onclick="window.autoFillPlaces()">🔄 Auto-Fill by Score</button>
+      <button class="small" onclick="window.clearPlaces()">✖ Clear</button>
+      <button class="add" onclick="window.applyPlaceAwards()">✅ Apply Place Awards</button>
+    </div>
+  </div>
+
   <div class="meta">
-    <button id="undoBtn" class="small">Undo Last</button>
+    <button id="undoBtn" class="small">↩ Undo Last</button>
     <button id="resetBtn" class="danger">Reset All</button>
     <span id="loggedInAs" class="muted"></span>
     <button id="signOutBtn" class="small">Sign Out</button>
   </div>
+
+  <!-- Activity Log -->
+  <div class="activity-log">
+    <h4>📋 Recent Activity</h4>
+    <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
+  </div>
 </div>
+
+<div id="toastContainer"></div>
 
 <script type="module" src="control.js"></script>
 </body>
