@@ -213,10 +213,12 @@ function updatePlacePreview() {
 
 /* undo */
 document.getElementById("undoBtn").onclick = async () => {
+  let undoneAction = null;
   await runTransaction(db, async t => {
     const snap = await t.get(scoresDoc);
     const la = snap.data()?.lastAction;
     if (!la) return;
+    undoneAction = la;
     const data = snap.data();
     const updates = { lastAction: null };
     if (la.type === 'place_awards' && Array.isArray(la.changes)) {
@@ -228,6 +230,21 @@ document.getElementById("undoBtn").onclick = async () => {
     }
     t.update(scoresDoc, updates);
   });
+  if (undoneAction) {
+    const houseName = {};
+    houses.forEach(h => { houseName[h.id] = h.name; });
+    let desc;
+    if (undoneAction.type === 'place_awards' && Array.isArray(undoneAction.changes)) {
+      desc = '↩ Undid place awards: ' + undoneAction.changes.map(c =>
+        `${houseName[c.house] || c.house} +${c.delta}`
+      ).join(' · ');
+    } else {
+      const sign = undoneAction.delta > 0 ? '+' : '';
+      /* show the original action that was reversed */
+      desc = `↩ Undid: ${houseName[undoneAction.house] || undoneAction.house} ${sign}${undoneAction.delta}`;
+    }
+    addLogEntry({ time: new Date().toLocaleTimeString(), desc });
+  }
   showToast('↩ Last action undone', 'info');
 };
 
@@ -235,6 +252,7 @@ document.getElementById("undoBtn").onclick = async () => {
 document.getElementById("resetBtn").onclick = () => {
   if (!confirm('Reset ALL scores to zero? This cannot be undone.')) return;
   setDoc(scoresDoc, { red: 0, white: 0, blue: 0, silver: 0, lastAction: null });
+  addLogEntry({ time: new Date().toLocaleTimeString(), desc: '🔄 All scores reset to zero' });
   showToast('🔄 All scores reset to zero', 'warn');
 };
 
