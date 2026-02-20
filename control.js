@@ -24,10 +24,10 @@ const auth = getAuth(app);
 const scoresDoc = doc(db,"leaderboard","scores");
 
 const houses = [
-  {id:'red',  name:'Red House',   bg:'#ea0125', text:'#fff'},
-  {id:'white',name:'White House', bg:'#fffeff', text:'#000'},
-  {id:'blue', name:'Blue House',  bg:'#005ab5', text:'#fff'},
-  {id:'silver',name:'Silver House',bg:'#a7a7aa',text:'#000'}
+  {id:'red',  name:'Red Panda House',   bg:'#ea0125', text:'#fff'},
+  {id:'white',name:'Polar House', bg:'#fffeff', text:'#000'},
+  {id:'blue', name:'Grizzly House',  bg:'#005ab5', text:'#fff'},
+  {id:'silver',name:'Kodiak House',bg:'#a7a7aa',text:'#000'}
 ];
 
 const PLACE_POINTS = [50, 30, 15, 10];
