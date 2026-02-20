@@ -31,7 +31,7 @@ const houses = [
 ];
 
 const PLACE_POINTS = [50, 30, 15, 10];
-const PLACE_MEDALS = ['🥇','🥈','🥉','🏅'];
+const PLACE_BADGES = ['1st', '2nd', '3rd', '4th'];
 const PLACE_NAMES  = ['1st','2nd','3rd','4th'];
 const MAX_LOG_ENTRIES = 10;
 
@@ -58,7 +58,7 @@ houses.forEach(h => {
     <div class="custom-row">
       <input id="custom-${h.id}" type="number" placeholder="Custom amount" min="1">
       <button class="add" onclick="window.applyCustom('${h.id}',1)">Add</button>
-      <button class="sub" onclick="window.applyCustom('${h.id}',-1)">Sub</button>
+      <button class="sub" onclick="window.applyCustom('${h.id}',-1)">Subtract</button>
     </div>
 
     <div class="points" id="pts-${h.id}">0</div>
@@ -93,7 +93,7 @@ PLACE_POINTS.forEach((pts, i) => {
     `<option value="${h.id}">${h.name}</option>`
   ).join('');
   row.innerHTML = `
-    <span class="place-medal">${PLACE_MEDALS[i]}</span>
+    <span class="place-medal">${PLACE_BADGES[i]}</span>
     <span class="place-name">${PLACE_NAMES[i]}</span>
     <span class="place-pts">+${pts} pts</span>
     <select id="place-${i+1}" class="place-select">
@@ -102,8 +102,42 @@ PLACE_POINTS.forEach((pts, i) => {
     </select>
   `;
   placeRows.appendChild(row);
-  row.querySelector('select').addEventListener('change', updatePlacePreview);
+  row.querySelector('select').addEventListener('change', () => {
+    applySmartPlaceSelection();
+    updatePlacePreview();
+  });
 });
+
+applySmartPlaceSelection();
+
+function applySmartPlaceSelection() {
+  const selects = PLACE_POINTS.map((_, i) => document.getElementById(`place-${i + 1}`)).filter(Boolean);
+  const selected = new Set(selects.map(sel => sel.value).filter(Boolean));
+
+  selects.forEach(sel => {
+    const currentValue = sel.value;
+    [...sel.options].forEach(opt => {
+      if (!opt.value) return;
+      opt.disabled = selected.has(opt.value) && opt.value !== currentValue;
+    });
+  });
+
+  const emptySelects = selects.filter(sel => !sel.value);
+  const remaining = houses.map(h => h.id).filter(id => !selected.has(id));
+
+  if (emptySelects.length === 1 && remaining.length === 1) {
+    emptySelects[0].value = remaining[0];
+
+    const refreshedSelected = new Set(selects.map(sel => sel.value).filter(Boolean));
+    selects.forEach(sel => {
+      const currentValue = sel.value;
+      [...sel.options].forEach(opt => {
+        if (!opt.value) return;
+        opt.disabled = refreshedSelected.has(opt.value) && opt.value !== currentValue;
+      });
+    });
+  }
+}
 
 /* fixed point buttons */
 async function applyChange(house, delta) {
@@ -136,13 +170,13 @@ window.applyPlaceAwards = async () => {
   })).filter(p => p.house);
 
   if (placements.length === 0) {
-    showToast('⚠️ Select at least one house to award!', 'warn');
+    showToast('Select at least one house to award.', 'warn');
     return;
   }
 
   const selectedHouses = placements.map(p => p.house);
   if (new Set(selectedHouses).size !== selectedHouses.length) {
-    showToast('⚠️ Each house can only be selected once!', 'warn');
+    showToast('Each house can only be selected once.', 'warn');
     return;
   }
 
@@ -162,14 +196,14 @@ window.applyPlaceAwards = async () => {
     const h = houses.find(h => h.id === p.house);
     return `${h?.name} +${p.pts}`;
   }).join(', ');
-  showToast(`🏆 Awarded: ${summary}`, 'success');
+  showToast(`Place awards applied: ${summary}`, 'success');
   window.clearPlaces();
 };
 
 /* auto-fill places by current score */
 window.autoFillPlaces = () => {
   if (!currentScores) {
-    showToast('⚠️ No score data yet — try again shortly', 'warn');
+    showToast('No score data yet. Try again shortly.', 'warn');
     return;
   }
   const sorted = [...houses].sort((a, b) => (currentScores[b.id] || 0) - (currentScores[a.id] || 0));
@@ -178,7 +212,7 @@ window.autoFillPlaces = () => {
     if (sel) sel.value = h.id;
   });
   updatePlacePreview();
-  showToast('✅ Places auto-filled by current scores', 'info');
+  showToast('Places auto-filled by current scores.', 'info');
 };
 
 /* clear place selects */
@@ -192,11 +226,12 @@ window.clearPlaces = () => {
 
 /* live award preview */
 function updatePlacePreview() {
+  applySmartPlaceSelection();
   const preview = document.getElementById('placePreview');
   if (!preview) return;
   const selections = PLACE_POINTS.map((pts, i) => ({
     pts,
-    medal: PLACE_MEDALS[i],
+    badge: PLACE_BADGES[i],
     house: document.getElementById(`place-${i + 1}`)?.value
   })).filter(p => p.house);
 
@@ -206,36 +241,54 @@ function updatePlacePreview() {
   }
   const chips = selections.map(p => {
     const h = houses.find(h => h.id === p.house);
-    return `<span class="preview-chip" style="background:${h?.bg};color:${h?.text}">${p.medal} ${h?.name} <strong>+${p.pts}</strong></span>`;
+    return `<span class="preview-chip" style="background:${h?.bg};color:${h?.text}">${p.badge} ${h?.name} <strong>+${p.pts}</strong></span>`;
   }).join('');
   preview.innerHTML = `<span class="preview-label">Will award:</span> ${chips}`;
 }
 
 /* undo */
 document.getElementById("undoBtn").onclick = async () => {
-  await runTransaction(db, async t => {
+  const result = await runTransaction(db, async t => {
     const snap = await t.get(scoresDoc);
     const la = snap.data()?.lastAction;
-    if (!la) return;
+    if (!la || la.type === 'undo') return { applied: false };
+
     const data = snap.data();
-    const updates = { lastAction: null };
+    const updates = {
+      lastAction: {
+        type: 'undo',
+        undone: la,
+        timestamp: serverTimestamp()
+      }
+    };
+
     if (la.type === 'place_awards' && Array.isArray(la.changes)) {
       for (const change of la.changes) {
         updates[change.house] = (data[change.house] || 0) - change.delta;
       }
     } else if (la.house) {
       updates[la.house] = (data[la.house] || 0) - la.delta;
+    } else {
+      return { applied: false };
     }
+
     t.update(scoresDoc, updates);
+    return { applied: true, undone: la };
   });
-  showToast('↩ Last action undone', 'info');
+
+  if (!result?.applied) {
+    showToast('There is no action to undo.', 'warn');
+    return;
+  }
+
+  showToast('Last action undone.', 'info');
 };
 
 /* reset */
 document.getElementById("resetBtn").onclick = () => {
   if (!confirm('Reset ALL scores to zero? This cannot be undone.')) return;
   setDoc(scoresDoc, { red: 0, white: 0, blue: 0, silver: 0, lastAction: null });
-  showToast('🔄 All scores reset to zero', 'warn');
+  showToast('All scores reset to zero.', 'warn');
 };
 
 /* toast notification */
@@ -276,7 +329,7 @@ function updateRanks(values) {
   const sorted = [...houses].sort((a, b) => (values[b.id] || 0) - (values[a.id] || 0));
   sorted.forEach((h, i) => {
     const el = document.getElementById("rank-" + h.id);
-    if (el) el.textContent = PLACE_MEDALS[i];
+    if (el) el.textContent = PLACE_BADGES[i];
   });
 }
 
@@ -307,6 +360,12 @@ onSnapshot(scoresDoc, s => {
     let key;
     if (la.type === 'place_awards' && la.changes) {
       key = 'pa:' + la.changes.map(c => c.house + c.delta).join(',');
+    } else if (la.type === 'undo' && la.undone) {
+      if (la.undone.type === 'place_awards' && la.undone.changes) {
+        key = 'undo:pa:' + la.undone.changes.map(c => c.house + c.delta).join(',');
+      } else if (la.undone.house !== null && la.undone.house !== undefined) {
+        key = `undo:${la.undone.house}:${la.undone.delta}`;
+      }
     } else if (la.house !== null && la.house !== undefined) {
       key = `${la.house}:${la.delta}`;
     }
@@ -315,10 +374,23 @@ onSnapshot(scoresDoc, s => {
       const time = new Date().toLocaleTimeString();
       let desc;
       if (la.type === 'place_awards' && la.changes) {
-        desc = '🏆 ' + la.changes.map(c => {
+        desc = 'Place awards: ' + la.changes.map(c => {
           const h = houses.find(h => h.id === c.house);
           return `${h?.name || c.house} +${c.delta} (${c.place})`;
         }).join(' · ');
+      } else if (la.type === 'undo' && la.undone) {
+        if (la.undone.type === 'place_awards' && la.undone.changes) {
+          const undoneSummary = la.undone.changes.map(c => {
+            const h = houses.find(h => h.id === c.house);
+            return `${h?.name || c.house} -${c.delta} (${c.place})`;
+          }).join(' · ');
+          desc = `Undo: ${undoneSummary}`;
+        } else {
+          const h = houses.find(h => h.id === la.undone.house);
+          const reversed = -la.undone.delta;
+          const sign = reversed > 0 ? '+' : '';
+          desc = `Undo: ${h?.name || la.undone.house} ${sign}${reversed}`;
+        }
       } else {
         const h = houses.find(h => h.id === la.house);
         const sign = la.delta > 0 ? '+' : '';

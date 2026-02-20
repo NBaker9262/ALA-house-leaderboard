@@ -51,7 +51,7 @@ button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:60
 .place-hint{font-size:13px;color:#888;}
 .place-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
 .place-row{display:flex;align-items:center;gap:10px;}
-.place-medal{font-size:20px;width:28px;text-align:center;flex-shrink:0;}
+.place-medal{font-size:13px;font-weight:700;width:36px;text-align:center;flex-shrink:0;}
 .place-name{font-weight:700;min-width:36px;flex-shrink:0;}
 .place-pts{font-size:13px;color:#888;min-width:52px;flex-shrink:0;}
 .place-select{
