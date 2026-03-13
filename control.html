@@ -4,52 +4,82 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>House Points Control</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="control.css" />
 </head>
 
 <body>
+<div class="login-shell" id="loginBox">
+  <form class="login-card" id="loginForm" novalidate>
+    <h1>Admin Sign In</h1>
+    <p class="login-subtitle">House points management</p>
 
-<div class="login" id="loginBox">
-  <h3>Admin Sign In</h3>
-  <input id="email" type="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Password">
-  <button id="emailPassBtn">Sign In</button>
+    <label class="field" for="email">
+      <span>Email</span>
+      <input id="email" type="email" autocomplete="username" placeholder="admin@school.org" required>
+    </label>
+
+    <label class="field" for="password">
+      <span>Password</span>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Password" required>
+    </label>
+
+    <p id="authError" class="auth-error" hidden></p>
+
+    <button id="emailPassBtn" class="btn btn-primary" type="submit">Sign In</button>
+  </form>
 </div>
 
 <div class="wrap" id="mainPanel">
-  <h2>House Points Control</h2>
+  <header class="topbar">
+    <div>
+      <h2>House Points Control</h2>
+      <p id="syncStatus" class="sync-status" data-tone="neutral">Connecting to live scores...</p>
+    </div>
 
-  <div class="houses" id="housesContainer"></div>
+    <div class="topbar-actions">
+      <span id="loggedInAs" class="muted"></span>
+      <button id="signOutBtn" class="btn btn-outline" type="button">Sign Out</button>
+    </div>
+  </header>
 
-  <!-- Place Awards Panel -->
-  <div class="place-awards" id="placePanel">
+  <section class="houses" id="housesContainer"></section>
+
+  <section class="place-awards" id="placePanel">
     <div class="place-awards-header">
       <h3>Award Place Points</h3>
       <span class="place-hint" id="placeHint"></span>
     </div>
+
     <div class="place-rows" id="placeRows"></div>
     <div id="placePreview" class="place-preview"></div>
+
     <div class="place-actions">
-      <button class="small" onclick="window.autoFillPlaces()">Auto-Fill by Score</button>
-      <button class="small" onclick="window.clearPlaces()">Clear</button>
-      <button class="add" onclick="window.applyPlaceAwards()">Apply Place Awards</button>
+      <button id="autoFillBtn" class="btn btn-muted" type="button" data-action-control>Auto Fill by Score</button>
+      <button id="clearPlacesBtn" class="btn btn-outline" type="button" data-action-control>Clear</button>
+      <button id="applyPlacesBtn" class="btn btn-primary" type="button" data-action-control>Apply Place Awards</button>
     </div>
-  </div>
+  </section>
 
-  <div class="meta">
-    <button id="undoBtn" class="small">Undo Last Action</button>
-    <button id="resetBtn" class="danger">Reset All</button>
-    <span id="loggedInAs" class="muted"></span>
-    <button id="signOutBtn" class="small">Sign Out</button>
-  </div>
+  <section class="meta">
+    <button id="undoBtn" class="btn btn-muted" type="button" data-action-control>Undo Last Action</button>
+    <button id="redoBtn" class="btn btn-muted" type="button" data-action-control>Redo</button>
+    <button id="resetBtn" class="btn btn-danger" type="button" data-action-control>Reset All Scores</button>
+  </section>
 
-  <!-- Activity Log -->
-  <div class="activity-log">
+  <section class="activity-log">
+    <h4>History Checkpoints</h4>
+    <div class="checkpoint-row">
+      <input id="checkpointName" type="text" maxlength="60" placeholder="Checkpoint name (example: Friday Assembly)" data-action-control>
+      <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Checkpoint</button>
+    </div>
+    <ul id="historyList"><li class="log-empty">No history yet</li></ul>
+  </section>
+
+  <section class="activity-log">
     <h4>Recent Activity</h4>
     <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
-  </div>
+  </section>
 </div>
 
 <div id="toastContainer"></div>
