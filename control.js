@@ -66,6 +66,9 @@ const dom = {
   syncStatus: document.getElementById("syncStatus"),
   activityList: document.getElementById("activityList"),
   historyList: document.getElementById("historyList"),
+  historyFilters: document.getElementById("historyFilters"),
+  gameSummaryContent: document.getElementById("gameSummaryContent"),
+  gameSummarySubtitle: document.getElementById("gameSummarySubtitle"),
   toastContainer: document.getElementById("toastContainer")
 };
 
@@ -76,6 +79,8 @@ let lastLoggedActionKey = null;
 let pendingWrites = 0;
 let currentUserEmail = "";
 let shouldWarnBeforeLeave = false;
+let historyFilter = "all";
+let collapsedGameGroups = new Set();
 
 renderHouseCards();
 buildPlaceRows();
@@ -314,6 +319,12 @@ function formatClock(date = new Date()) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = String(text);
+  return div.innerHTML;
+}
+
 function setSyncStatus(message, tone = "neutral") {
   dom.syncStatus.textContent = message;
   dom.syncStatus.dataset.tone = tone;
@@ -440,38 +451,420 @@ function updateRedoUndoButtons() {
   dom.redoBtn.disabled = !canRedo;
 }
 
+function getActionType(commit) {
+  const s = commit.summary || "";
+  if (s.startsWith("Checkpoint:")) return "checkpoint";
+  if (s.startsWith("Place awards:")) return "place";
+  if (s === "Reset all scores") return "reset";
+  if (s.startsWith("Undo:") || s.startsWith("UNDO:")) return "undo";
+  if (s.startsWith("Redo:") || s.startsWith("REDO:")) return "redo";
+  if (s.startsWith("Restore:") || s.startsWith("RESTORE:")) return "restore";
+  return "delta";
+}
+
+function getActionIcon(type) {
+  switch (type) {
+    case "checkpoint": return "🏁";
+    case "place": return "🏆";
+    case "reset": return "🔄";
+    case "undo": return "↩";
+    case "redo": return "↪";
+    case "restore": return "⏪";
+    default: return "±";
+  }
+}
+
+function getHouseColor(houseId) {
+  const map = { red: "#ea0125", white: "#fffeff", blue: "#005ab5", silver: "#a7a7aa" };
+  return map[houseId] || "#999";
+}
+
+function getHouseTextColor(houseId) {
+  return (houseId === "white" || houseId === "silver") ? "#111" : "#fff";
+}
+
+function getHouseShortName(houseId) {
+  const map = { red: "Red", white: "Polar", blue: "Grizzly", silver: "Kodiak" };
+  return map[houseId] || houseId;
+}
+
+function groupCommitsIntoGames(commits) {
+  const groups = [];
+  let currentGroup = null;
+
+  for (let i = 0; i < commits.length; i++) {
+    const commit = commits[i];
+    const isCheckpoint = commit.summary?.startsWith("Checkpoint:");
+
+    if (isCheckpoint) {
+      if (currentGroup) {
+        currentGroup.endCheckpoint = commit;
+        currentGroup.endIndex = i;
+        groups.push(currentGroup);
+      }
+      currentGroup = {
+        name: commit.summary.replace("Checkpoint: ", ""),
+        startCheckpoint: commit,
+        endCheckpoint: null,
+        startIndex: i,
+        endIndex: i,
+        entries: [{ commit, index: i }]
+      };
+    } else {
+      if (!currentGroup) {
+        currentGroup = {
+          name: "Before First Checkpoint",
+          startCheckpoint: null,
+          endCheckpoint: null,
+          startIndex: i,
+          endIndex: i,
+          entries: []
+        };
+      }
+      currentGroup.entries.push({ commit, index: i });
+      currentGroup.endIndex = i;
+    }
+  }
+
+  if (currentGroup) {
+    groups.push(currentGroup);
+  }
+
+  return groups;
+}
+
+function computeGameDeltas(group) {
+  const first = group.entries[0]?.commit;
+  const last = group.entries[group.entries.length - 1]?.commit;
+  if (!first || !last) return { red: 0, white: 0, blue: 0, silver: 0 };
+
+  const baseScores = group.startCheckpoint
+    ? group.startCheckpoint.scores
+    : { red: 0, white: 0, blue: 0, silver: 0 };
+
+  return {
+    red: (last.scores.red || 0) - (baseScores.red || 0),
+    white: (last.scores.white || 0) - (baseScores.white || 0),
+    blue: (last.scores.blue || 0) - (baseScores.blue || 0),
+    silver: (last.scores.silver || 0) - (baseScores.silver || 0)
+  };
+}
+
+function matchesFilter(commit, filter) {
+  const type = getActionType(commit);
+  switch (filter) {
+    case "all": return true;
+    case "games": return type === "checkpoint";
+    case "points": return type === "delta";
+    case "awards": return type === "place";
+    default: return true;
+  }
+}
+
+function renderHistoryEntry(commit, index, cursor) {
+  const isCurrent = index === cursor;
+  const type = getActionType(commit);
+  const icon = getActionIcon(type);
+
+  const scoreChips = houses.map(h => {
+    const bg = getHouseColor(h.id);
+    const textC = getHouseTextColor(h.id);
+    return `<span class="history-score-chip" style="background:${bg};color:${textC}">${getHouseShortName(h.id)}:${commit.scores[h.id]}</span>`;
+  }).join("");
+
+  const authorText = commit.authorEmail ? escapeHtml(commit.authorEmail) : "";
+  const timeText = new Date(commit.createdAtMs).toLocaleString();
+
+  const currentTag = isCurrent ? `<span class="history-entry-current-tag">CURRENT</span>` : "";
+  const restoreBtn = isCurrent ? "" : `<button class="btn btn-outline btn-mini" type="button" data-action-control data-history-index="${index}">Restore</button>`;
+
+  const rawSummary = commit.summary.startsWith("Checkpoint: ")
+    ? commit.summary.replace("Checkpoint: ", "")
+    : commit.summary;
+  const summaryDisplay = escapeHtml(rawSummary);
+
+  return `
+    <div class="history-entry">
+      <div class="history-entry-icon type-${type}" title="${type}">${icon}</div>
+      <div class="history-entry-body">
+        <div class="history-entry-title">
+          ${currentTag}
+          <span>#${commit.id} ${summaryDisplay}</span>
+        </div>
+        <div class="history-entry-meta">
+          <span>${timeText}</span>
+          ${authorText ? `<span>· ${authorText}</span>` : ""}
+          <span>· </span>
+          <span class="history-entry-scores">${scoreChips}</span>
+        </div>
+      </div>
+      <div class="history-entry-actions">${restoreBtn}</div>
+    </div>
+  `;
+}
+
+function renderDeltaChips(deltas) {
+  return houses.map(h => {
+    const d = deltas[h.id] || 0;
+    const bg = getHouseColor(h.id);
+    const textC = getHouseTextColor(h.id);
+    const sign = d > 0 ? "+" : "";
+    return `<span class="game-group-delta-chip" style="background:${bg};color:${textC}">${getHouseShortName(h.id)} ${sign}${d}</span>`;
+  }).join("");
+}
+
 function renderHistoryList() {
   const { commits, cursor } = currentHistory;
 
   if (!commits.length) {
-    dom.historyList.innerHTML = '<li class="log-empty">No history yet</li>';
+    dom.historyList.innerHTML = '<div class="log-empty">No history yet</div>';
+    updateRedoUndoButtons();
+    renderGameSummary([]);
+    return;
+  }
+
+  const groups = groupCommitsIntoGames(commits);
+  renderGameSummary(groups);
+
+  if (historyFilter === "games") {
+    renderCheckpointsOnlyView(commits, cursor);
     updateRedoUndoButtons();
     return;
   }
 
-  const items = [];
-  for (let i = commits.length - 1; i >= 0 && items.length < HISTORY_LIST_LIMIT; i -= 1) {
-    const commit = commits[i];
-    const isCurrent = i === cursor;
-    const scoreText = `R:${commit.scores.red} W:${commit.scores.white} B:${commit.scores.blue} S:${commit.scores.silver}`;
-    const authorText = commit.authorEmail ? ` · by ${commit.authorEmail}` : "";
-    const deltaText = commit.summary.startsWith("Checkpoint:") && commit.checkpointDelta
-      ? ` · since last save R:${commit.checkpointDelta.red > 0 ? "+" : ""}${commit.checkpointDelta.red} W:${commit.checkpointDelta.white > 0 ? "+" : ""}${commit.checkpointDelta.white} B:${commit.checkpointDelta.blue > 0 ? "+" : ""}${commit.checkpointDelta.blue} S:${commit.checkpointDelta.silver > 0 ? "+" : ""}${commit.checkpointDelta.silver}`
-      : "";
+  let html = "";
+  let entryCount = 0;
 
-    items.push(`
-      <li class="history-item">
-        <div>
-          <div>${isCurrent ? "<strong>Current</strong> · " : ""}#${commit.id} ${commit.summary}</div>
-          <div class="history-meta">${new Date(commit.createdAtMs).toLocaleString()}${authorText} · ${scoreText}${deltaText}</div>
-        </div>
-        ${isCurrent ? "" : `<button class=\"btn btn-outline btn-mini\" type=\"button\" data-action-control data-history-index=\"${i}\">Restore</button>`}
-      </li>
-    `);
+  for (let g = groups.length - 1; g >= 0 && entryCount < HISTORY_LIST_LIMIT; g--) {
+    const group = groups[g];
+    const isCheckpointGroup = group.startCheckpoint !== null;
+    const groupKey = `game-${g}`;
+    const isCollapsed = collapsedGameGroups.has(groupKey);
+
+    const filteredEntries = group.entries.filter(e => matchesFilter(e.commit, historyFilter));
+    if (filteredEntries.length === 0 && !isCheckpointGroup) continue;
+
+    if (isCheckpointGroup) {
+      const deltas = group.endCheckpoint?.checkpointDelta || computeGameDeltas(group);
+      const entryCountInGroup = filteredEntries.length;
+      const collapsedClass = isCollapsed ? " collapsed" : "";
+
+      html += `<div class="history-game-group">`;
+      html += `<div class="game-group-head${collapsedClass}" data-game-group="${groupKey}">`;
+      html += `<span class="game-group-chevron">▼</span>`;
+      html += `<span class="game-group-title"><span class="checkpoint-icon">🏁</span>${escapeHtml(group.name)}</span>`;
+      html += `<span class="game-group-meta">${entryCountInGroup} action${entryCountInGroup !== 1 ? "s" : ""}</span>`;
+      html += `</div>`;
+
+      if (!isCollapsed) {
+        html += `<div class="game-group-delta-summary">${renderDeltaChips(deltas)}</div>`;
+      }
+
+      html += `<div class="game-group-entries"${isCollapsed ? ' style="display:none"' : ""}>`;
+
+      for (let e = filteredEntries.length - 1; e >= 0 && entryCount < HISTORY_LIST_LIMIT; e--) {
+        const { commit, index } = filteredEntries[e];
+        html += renderHistoryEntry(commit, index, cursor);
+        entryCount++;
+      }
+
+      html += `</div></div>`;
+    } else {
+      for (let e = filteredEntries.length - 1; e >= 0 && entryCount < HISTORY_LIST_LIMIT; e--) {
+        const { commit, index } = filteredEntries[e];
+        html += renderHistoryEntry(commit, index, cursor);
+        entryCount++;
+      }
+    }
   }
 
-  dom.historyList.innerHTML = items.join("");
+  dom.historyList.innerHTML = html || '<div class="log-empty">No matching history entries</div>';
   updateRedoUndoButtons();
+}
+
+function renderCheckpointsOnlyView(commits, cursor) {
+  const checkpoints = [];
+  let prevCheckpointScores = { red: 0, white: 0, blue: 0, silver: 0 };
+
+  for (let i = 0; i < commits.length; i++) {
+    const commit = commits[i];
+    if (commit.summary?.startsWith("Checkpoint:")) {
+      const deltas = commit.checkpointDelta || {
+        red: (commit.scores.red || 0) - prevCheckpointScores.red,
+        white: (commit.scores.white || 0) - prevCheckpointScores.white,
+        blue: (commit.scores.blue || 0) - prevCheckpointScores.blue,
+        silver: (commit.scores.silver || 0) - prevCheckpointScores.silver
+      };
+
+      checkpoints.push({ commit, index: i, deltas });
+      prevCheckpointScores = { ...commit.scores };
+    }
+  }
+
+  if (checkpoints.length === 0) {
+    dom.historyList.innerHTML = '<div class="log-empty">No checkpoints/games recorded yet</div>';
+    return;
+  }
+
+  let html = "";
+  for (let c = checkpoints.length - 1; c >= 0; c--) {
+    const { commit, index, deltas } = checkpoints[c];
+    const isCurrent = index === cursor;
+    const gameName = escapeHtml(commit.summary.replace("Checkpoint: ", ""));
+
+    const maxDelta = Math.max(
+      Math.abs(deltas.red), Math.abs(deltas.white),
+      Math.abs(deltas.blue), Math.abs(deltas.silver), 1
+    );
+
+    const deltaBars = houses.map(h => {
+      const d = deltas[h.id] || 0;
+      const pct = Math.round((Math.abs(d) / maxDelta) * 100);
+      const cls = d > 0 ? "positive" : d < 0 ? "negative" : "zero";
+      const sign = d > 0 ? "+" : "";
+      return `
+        <div class="game-delta-bar">
+          <div class="game-delta-bar-label">${getHouseShortName(h.id)}</div>
+          <div class="game-delta-bar-track">
+            <div class="game-delta-bar-fill" style="height:${pct}%;background:${getHouseColor(h.id)};opacity:0.7"></div>
+          </div>
+          <div class="game-delta-bar-value ${cls}">${sign}${d}</div>
+        </div>
+      `;
+    }).join("");
+
+    const allDeltas = [deltas.red, deltas.white, deltas.blue, deltas.silver];
+    const maxGain = Math.max(...allDeltas);
+    const winnerIds = houses.filter(h => (deltas[h.id] || 0) === maxGain && maxGain > 0);
+    const winnerBadge = winnerIds.length > 0
+      ? winnerIds.map(w => `<span class="game-winner-badge" style="background:${getHouseColor(w.id)};color:${getHouseTextColor(w.id)}">🏆 ${w.name}</span>`).join(" ")
+      : "";
+
+    const currentTag = isCurrent ? `<span class="history-entry-current-tag">CURRENT</span>` : "";
+    const restoreBtn = isCurrent ? "" : `<button class="btn btn-outline btn-mini" type="button" data-action-control data-history-index="${index}">Restore</button>`;
+
+    html += `
+      <div class="history-game-group">
+        <div class="game-group-head" style="cursor:default">
+          <span class="game-group-title"><span class="checkpoint-icon">🏁</span>${gameName} ${currentTag}</span>
+          <span class="game-group-meta">${new Date(commit.createdAtMs).toLocaleDateString()}</span>
+          ${restoreBtn}
+        </div>
+        <div class="game-group-entries">
+          <div style="padding: 10px 12px;">
+            <div class="game-delta-bars">${deltaBars}</div>
+            ${winnerBadge}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  dom.historyList.innerHTML = html;
+}
+
+function renderGameSummary(groups) {
+  const checkpointGroups = groups.filter(g => g.startCheckpoint !== null);
+
+  if (checkpointGroups.length === 0) {
+    dom.gameSummaryContent.innerHTML = '<div class="game-summary-empty">No games recorded yet. Create checkpoints to track games.</div>';
+    dom.gameSummarySubtitle.textContent = "Points breakdown across games";
+    return;
+  }
+
+  const wins = { red: 0, white: 0, blue: 0, silver: 0 };
+  const totalGameDeltas = { red: 0, white: 0, blue: 0, silver: 0 };
+  let prevScores = { red: 0, white: 0, blue: 0, silver: 0 };
+
+  const gameData = [];
+  for (const group of checkpointGroups) {
+    const cp = group.endCheckpoint || group.startCheckpoint;
+    const deltas = cp.checkpointDelta || {
+      red: (cp.scores.red || 0) - prevScores.red,
+      white: (cp.scores.white || 0) - prevScores.white,
+      blue: (cp.scores.blue || 0) - prevScores.blue,
+      silver: (cp.scores.silver || 0) - prevScores.silver
+    };
+
+    for (const h of houses) {
+      totalGameDeltas[h.id] += deltas[h.id] || 0;
+    }
+
+    const allDeltas = houses.map(h => deltas[h.id] || 0);
+    const maxGain = Math.max(...allDeltas);
+    if (maxGain > 0) {
+      for (const h of houses) {
+        if ((deltas[h.id] || 0) === maxGain) wins[h.id]++;
+      }
+    }
+
+    gameData.push({ name: group.name, deltas, checkpoint: cp });
+    prevScores = { ...cp.scores };
+  }
+
+  dom.gameSummarySubtitle.textContent = `${checkpointGroups.length} game${checkpointGroups.length !== 1 ? "s" : ""} tracked`;
+
+  const statsHtml = `
+    <div class="game-summary-stats">
+      <div class="game-stat-card">
+        <div class="game-stat-value">${checkpointGroups.length}</div>
+        <div class="game-stat-label">Games Played</div>
+      </div>
+      ${houses.map(h => `
+        <div class="game-stat-card" style="border-top: 3px solid ${getHouseColor(h.id)}">
+          <div class="game-stat-value">${wins[h.id]}</div>
+          <div class="game-stat-label">${getHouseShortName(h.id)} Wins</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  const gameCards = gameData.slice().reverse().map((game, idx) => {
+    const maxDelta = Math.max(
+      Math.abs(game.deltas.red), Math.abs(game.deltas.white),
+      Math.abs(game.deltas.blue), Math.abs(game.deltas.silver), 1
+    );
+
+    const allDeltas = houses.map(h => game.deltas[h.id] || 0);
+    const maxGain = Math.max(...allDeltas);
+    const winnerHouses = houses.filter(h => (game.deltas[h.id] || 0) === maxGain && maxGain > 0);
+    const winnerText = winnerHouses.length > 0
+      ? `🏆 ${winnerHouses.map(w => getHouseShortName(w.id)).join(", ")}`
+      : "No winner";
+
+    const deltaBars = houses.map(h => {
+      const d = game.deltas[h.id] || 0;
+      const pct = Math.round((Math.abs(d) / maxDelta) * 100);
+      const cls = d > 0 ? "positive" : d < 0 ? "negative" : "zero";
+      const sign = d > 0 ? "+" : "";
+      return `
+        <div class="game-delta-bar">
+          <div class="game-delta-bar-label">${getHouseShortName(h.id)}</div>
+          <div class="game-delta-bar-track">
+            <div class="game-delta-bar-fill" style="height:${pct}%;background:${getHouseColor(h.id)};opacity:0.7"></div>
+          </div>
+          <div class="game-delta-bar-value ${cls}">${sign}${d}</div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="game-card">
+        <div class="game-card-head" data-summary-toggle="${idx}">
+          <div class="game-card-title">
+            <span class="game-badge">GAME ${gameData.length - idx}</span>
+            <span>${escapeHtml(game.name)}</span>
+          </div>
+          <span class="game-card-meta">${winnerText}</span>
+        </div>
+        <div class="game-card-body" id="summary-body-${idx}">
+          <div class="game-delta-bars">${deltaBars}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  dom.gameSummaryContent.innerHTML = statsHtml + gameCards;
 }
 
 function updateLeaveWarningState() {
@@ -884,10 +1277,40 @@ dom.checkpointName.addEventListener("input", () => {
 dom.historyList.addEventListener("click", event => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+
   const button = target.closest("button[data-history-index]");
-  if (!button) return;
-  const index = Number.parseInt(button.dataset.historyIndex || "", 10);
-  void restoreHistoryIndex(index);
+  if (button) {
+    const index = Number.parseInt(button.dataset.historyIndex || "", 10);
+    void restoreHistoryIndex(index);
+    return;
+  }
+
+  const gameGroupHead = target.closest("[data-game-group]");
+  if (gameGroupHead) {
+    const groupKey = gameGroupHead.dataset.gameGroup;
+    if (collapsedGameGroups.has(groupKey)) {
+      collapsedGameGroups.delete(groupKey);
+    } else {
+      collapsedGameGroups.add(groupKey);
+    }
+    renderHistoryList();
+    return;
+  }
+});
+
+dom.historyFilters.addEventListener("click", event => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tab = target.closest(".filter-tab");
+  if (!tab) return;
+
+  const filter = tab.dataset.filter;
+  if (!filter) return;
+
+  historyFilter = filter;
+  dom.historyFilters.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
+  tab.classList.add("active");
+  renderHistoryList();
 });
 
 onSnapshot(
