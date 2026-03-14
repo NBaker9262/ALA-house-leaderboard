@@ -67,13 +67,33 @@
     <button id="resetBtn" class="btn btn-danger" type="button" data-action-control>Reset All Scores</button>
   </section>
 
-  <section class="activity-log">
-    <h4>History Checkpoints</h4>
+  <section class="game-summary-section" id="gameSummarySection">
+    <div class="game-summary-header">
+      <h3>Game Summary</h3>
+      <span class="game-summary-subtitle" id="gameSummarySubtitle">Points breakdown across games</span>
+    </div>
+    <div id="gameSummaryContent" class="game-summary-content">
+      <div class="game-summary-empty">No games recorded yet. Create checkpoints to track games.</div>
+    </div>
+  </section>
+
+  <section class="activity-log history-section">
+    <div class="history-header">
+      <h4>History &amp; Checkpoints</h4>
+      <div class="history-toolbar">
+        <div class="history-filters" id="historyFilters">
+          <button class="filter-tab active" data-filter="all" type="button">All</button>
+          <button class="filter-tab" data-filter="games" type="button">Games Only</button>
+          <button class="filter-tab" data-filter="points" type="button">Point Changes</button>
+          <button class="filter-tab" data-filter="awards" type="button">Place Awards</button>
+        </div>
+      </div>
+    </div>
     <div class="checkpoint-row">
       <input id="checkpointName" type="text" maxlength="60" placeholder="Checkpoint name (example: Friday Assembly)" data-action-control>
       <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Checkpoint</button>
     </div>
-    <ul id="historyList"><li class="log-empty">No history yet</li></ul>
+    <div id="historyList" class="history-list"><div class="log-empty">No history yet</div></div>
   </section>
 
   <section class="activity-log">
