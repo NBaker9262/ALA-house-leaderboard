@@ -38,8 +38,8 @@ const QUICK_DELTAS = [10, 20, 50];
 const PLACE_POINTS = [50, 30, 15, 10];
 const PLACE_BADGES = ["1st", "2nd", "3rd", "4th"];
 const MAX_LOG_ENTRIES = 14;
-const MAX_HISTORY_COMMITS = 60;
-const HISTORY_LIST_LIMIT = 12;
+const MAX_HISTORY_COMMITS = 1000;
+const HISTORY_LIST_LIMIT = 500;
 
 const dom = {
   loginBox: document.getElementById("loginBox"),
