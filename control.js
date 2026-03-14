@@ -319,6 +319,12 @@ function formatClock(date = new Date()) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = String(text);
+  return div.innerHTML;
+}
+
 function setSyncStatus(message, tone = "neutral") {
   dom.syncStatus.textContent = message;
   dom.syncStatus.dataset.tone = tone;
@@ -566,15 +572,16 @@ function renderHistoryEntry(commit, index, cursor) {
     return `<span class="history-score-chip" style="background:${bg};color:${textC}">${getHouseShortName(h.id)}:${commit.scores[h.id]}</span>`;
   }).join("");
 
-  const authorText = commit.authorEmail ? `${commit.authorEmail}` : "";
+  const authorText = commit.authorEmail ? escapeHtml(commit.authorEmail) : "";
   const timeText = new Date(commit.createdAtMs).toLocaleString();
 
   const currentTag = isCurrent ? `<span class="history-entry-current-tag">CURRENT</span>` : "";
   const restoreBtn = isCurrent ? "" : `<button class="btn btn-outline btn-mini" type="button" data-action-control data-history-index="${index}">Restore</button>`;
 
-  const summaryDisplay = commit.summary.startsWith("Checkpoint: ")
+  const rawSummary = commit.summary.startsWith("Checkpoint: ")
     ? commit.summary.replace("Checkpoint: ", "")
     : commit.summary;
+  const summaryDisplay = escapeHtml(rawSummary);
 
   return `
     <div class="history-entry">
@@ -645,7 +652,7 @@ function renderHistoryList() {
       html += `<div class="history-game-group">`;
       html += `<div class="game-group-head${collapsedClass}" data-game-group="${groupKey}">`;
       html += `<span class="game-group-chevron">▼</span>`;
-      html += `<span class="game-group-title"><span class="checkpoint-icon">🏁</span>${group.name}</span>`;
+      html += `<span class="game-group-title"><span class="checkpoint-icon">🏁</span>${escapeHtml(group.name)}</span>`;
       html += `<span class="game-group-meta">${entryCountInGroup} action${entryCountInGroup !== 1 ? "s" : ""}</span>`;
       html += `</div>`;
 
@@ -703,7 +710,7 @@ function renderCheckpointsOnlyView(commits, cursor) {
   for (let c = checkpoints.length - 1; c >= 0; c--) {
     const { commit, index, deltas } = checkpoints[c];
     const isCurrent = index === cursor;
-    const gameName = commit.summary.replace("Checkpoint: ", "");
+    const gameName = escapeHtml(commit.summary.replace("Checkpoint: ", ""));
 
     const maxDelta = Math.max(
       Math.abs(deltas.red), Math.abs(deltas.white),
@@ -846,7 +853,7 @@ function renderGameSummary(groups) {
         <div class="game-card-head" data-summary-toggle="${idx}">
           <div class="game-card-title">
             <span class="game-badge">GAME ${gameData.length - idx}</span>
-            <span>${game.name}</span>
+            <span>${escapeHtml(game.name)}</span>
           </div>
           <span class="game-card-meta">${winnerText}</span>
         </div>
