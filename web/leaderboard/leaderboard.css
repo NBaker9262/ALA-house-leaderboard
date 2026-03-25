@@ -41,6 +41,15 @@ body {
 
 header {
   text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.ala-mark {
+  width: clamp(52px, 7vw, 90px);
+  height: auto;
+  object-fit: contain;
 }
 
 h1 {

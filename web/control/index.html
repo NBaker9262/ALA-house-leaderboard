@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>House Points Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="control.css" />
+</head>
+<body>
+<div class="login-shell" id="loginShell">
+  <form class="login-card" id="loginForm" novalidate>
+    <div class="brand">ALA House Points</div>
+    <h1>Admin Sign In</h1>
+    <p class="muted">Event -> Game -> Point Changes</p>
+
+    <label class="field" for="email">
+      <span>Email</span>
+      <input id="email" type="email" autocomplete="username" required placeholder="you@alaschools.org" />
+    </label>
+
+    <label class="field" for="password">
+      <span>Password</span>
+      <input id="password" type="password" autocomplete="current-password" required placeholder="Password" />
+    </label>
+
+    <p id="authError" class="auth-error" hidden></p>
+    <button id="signInBtn" class="btn btn-primary" type="submit">Sign In</button>
+  </form>
+</div>
+
+<main id="app" class="wrap" hidden>
+  <header class="topbar">
+    <div>
+      <h2>House Points Control</h2>
+      <p class="muted">Live workflow: start event, save games, apply points.</p>
+    </div>
+    <div class="topbar-actions">
+      <div class="whoami">
+        <strong id="whoEmail">-</strong>
+        <span id="whoRole">Staff</span>
+      </div>
+      <a class="btn btn-outline" href="/leaderboard/index.html">Leaderboard</a>
+      <button id="signOutBtn" class="btn btn-ghost" type="button">Sign Out</button>
+    </div>
+  </header>
+
+  <section class="stats">
+    <article class="stat-card">
+      <span>Red Panda</span>
+      <strong id="scoreRed">0</strong>
+    </article>
+    <article class="stat-card">
+      <span>Polar</span>
+      <strong id="scoreWhite">0</strong>
+    </article>
+    <article class="stat-card">
+      <span>Grizzly</span>
+      <strong id="scoreBlue">0</strong>
+    </article>
+    <article class="stat-card">
+      <span>Kodiak</span>
+      <strong id="scoreSilver">0</strong>
+    </article>
+  </section>
+
+  <section class="permission-panel">
+    <h3>Account Permissions</h3>
+    <div id="permissionGrid" class="permission-grid"></div>
+  </section>
+
+  <div class="layout">
+    <section class="panel">
+      <h3>1) Start Event</h3>
+      <div class="field-row">
+        <input id="eventName" type="text" maxlength="80" placeholder="Event name (example: Spring Sports Assembly)" />
+        <button id="startEventBtn" class="btn btn-primary" type="button">Start Event</button>
+      </div>
+      <div id="activeEventCard" class="active-event">
+        <p>No active event.</p>
+      </div>
+      <div class="field-row">
+        <button id="closeEventBtn" class="btn btn-outline" type="button">Close Active Event</button>
+        <button id="deleteLastGameBtn" class="btn btn-danger" type="button">Delete Last Game</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>2) Add Game + Point Changes</h3>
+      <p class="muted">You cannot add points until an event is active.</p>
+      <label class="field" for="gameName">
+        <span>Game Name</span>
+        <input id="gameName" type="text" maxlength="80" placeholder="Game name (example: Relay Race 1)" />
+      </label>
+
+      <div class="houses-grid">
+        <label class="house-input" for="deltaRed">
+          <span>Red Panda</span>
+          <input id="deltaRed" type="number" value="0" step="1" />
+        </label>
+        <label class="house-input" for="deltaWhite">
+          <span>Polar</span>
+          <input id="deltaWhite" type="number" value="0" step="1" />
+        </label>
+        <label class="house-input" for="deltaBlue">
+          <span>Grizzly</span>
+          <input id="deltaBlue" type="number" value="0" step="1" />
+        </label>
+        <label class="house-input" for="deltaSilver">
+          <span>Kodiak</span>
+          <input id="deltaSilver" type="number" value="0" step="1" />
+        </label>
+      </div>
+
+      <div class="quick-row">
+        <button class="chip" type="button" data-quick="50">+50</button>
+        <button class="chip" type="button" data-quick="30">+30</button>
+        <button class="chip" type="button" data-quick="15">+15</button>
+        <button class="chip" type="button" data-quick="10">+10</button>
+        <select id="quickHouse">
+          <option value="red">Red Panda</option>
+          <option value="white">Polar</option>
+          <option value="blue">Grizzly</option>
+          <option value="silver">Kodiak</option>
+        </select>
+      </div>
+
+      <div class="field-row">
+        <button id="saveGameBtn" class="btn btn-primary" type="button">3) Save Game</button>
+        <button id="clearGameBtn" class="btn btn-ghost" type="button">Clear Inputs</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="layout two">
+    <section class="panel">
+      <h3>Event List</h3>
+      <ul id="eventsList" class="stack-list"></ul>
+    </section>
+
+    <section class="panel">
+      <h3>Event History</h3>
+      <div class="field-row">
+        <button id="refreshBtn" class="btn btn-outline" type="button">Refresh</button>
+        <button id="clearEventsBtn" class="btn btn-danger" type="button">Clear Event Data</button>
+      </div>
+      <ul id="historyList" class="stack-list"></ul>
+    </section>
+  </div>
+
+  <p id="status" class="status">Connecting...</p>
+</main>
+
+<script type="module" src="control.js"></script>
+</body>
+</html>
