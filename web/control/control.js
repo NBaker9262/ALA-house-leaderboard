@@ -629,7 +629,7 @@ async function syncPendingOfflineActions() {
   }
 }
 
-
+function normalizeId(value) {
   return String(value || "")
     .toLowerCase()
     .trim()

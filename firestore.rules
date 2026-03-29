@@ -11,9 +11,9 @@ service cloud.firestore {
 
     function profileRole() {
       return signedIn() &&
-        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role is string
-          ? get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)).data.role is string
+          ? get(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)).data.role
           : "";
     }
 
@@ -111,8 +111,8 @@ service cloud.firestore {
       }
     }
 
-    match /userProfiles/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isSuperadmin() || isAdmin());
+    match /userProfiles/{email} {
+      allow read: if signedIn() && (request.auth.token.email == email || isSuperadmin() || isAdmin());
       allow create, update: if isSuperadmin();
       allow delete: if false;
     }
