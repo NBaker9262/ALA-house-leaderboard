@@ -1,0 +1,42 @@
+name: Sheet Auto Sync
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Write GCP Credentials
+        env:
+          GCP_CREDENTIALS_JSON: ${{ secrets.GCP_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$GCP_CREDENTIALS_JSON" ]; then
+            echo "Missing GCP_CREDENTIALS_JSON secret" >&2
+            exit 1
+          fi
+          echo "$GCP_CREDENTIALS_JSON" > /tmp/gcp-credentials.json
+
+      - name: Run Auto Sync
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_POINTS_SHEET_TAB: Automatic Points
+          GOOGLE_STUDENTS_SHEET_TAB: Students
+        run: node scripts/admin/auto-sync.mjs --apply --purge-students

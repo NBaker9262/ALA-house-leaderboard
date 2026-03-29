@@ -1,0 +1,350 @@
+# Quick Reference - What Changed Where
+
+## File-by-File Changes
+
+### 1️⃣ `web/control/control.js` (Main Logic File)
+
+#### Added: Fuzzy Matching Utilities (Lines 506-573)
+```javascript
+// NEW: Normalize tags for matching
+normalizeTag(tag)
+  └─ Converts: "Basketball" → "basketball"
+
+// NEW: Calculate similarity between strings
+levenshteinDistance(a, b)
+  └─ Returns: edit distance between strings
+
+// NEW: Get confidence score (0-1) for match
+calculateTagSimilarity(input, candidate)
+  └─ Returns: similarity score
+
+// NEW: Find best event match from catalog
+fuzzyMatchEventTag(input, eventCatalog)
+  └─ Returns: { match, confidence, matches[] }
+```
+
+#### Modified: Context Logic (Line 1733)
+```javascript
+// OLD:
+function activeContextOrWarn() {
+  if (activeContext) return activeContext;
+  showToast("Start an event context before scoring.", "warn");
+  return null;  // BLOCKS SCORING
+}
+
+// NEW:
+function activeContextOrWarn() {
+  if (activeContext) return activeContext;
+  return {
+    // Auto-creates default context (NO LONGER BLOCKS)
+    category: "", event: "", subevent: "",
+    reason: "Untagged", notes: "",
+    isDefault: true
+  };
+}
+```
+
+#### Modified: Audit Entry Builder (Lines 1760-1776)
+```javascript
+// OLD: function buildAppliedAuditEntry({
+//   type, summary, changes, context, reason, notes,
+//   beforeScores, afterScores, extra
+// })
+
+// NEW: function buildAppliedAuditEntry({
+//   type, summary, changes, context, reason, notes,
+//   eventTag: "",  // ← NEW PARAMETER
+//   beforeScores, afterScores, extra
+// })
+
+// And stores: { ..., eventTag, eventTagNormalized: normalizeTag(eventTag), ... }
+```
+
+#### Added: Tag UI Functions (Lines 966-1044)
+```javascript
+renderTagSuggestions(input)
+  └─ Shows fuzzy-matched event suggestions
+
+addTagChip(tag)
+  └─ Creates blue chip element for selected tag
+
+getSelectedTags()
+  └─ Returns array of currently selected tags
+```
+
+#### Modified: Scoring Action (Lines 2015-2045)
+```javascript
+// OLD: submitScoringAction({ type, summary, changes })
+//   └─ No event tag handling
+
+// NEW: submitScoringAction({ type, summary, changes })
+//   const selectedTags = getSelectedTags()
+//   const eventTag = selectedTags[0] || ""
+//   └─ Extracts and passes eventTag with score
+```
+
+#### Modified: Proposal Submission (Line 1952)
+```javascript
+// OLD: async function submitProposal({
+//   actionType, summary, changes, context, reason, notes, pathRequest
+// })
+
+// NEW: async function submitProposal({
+//   actionType, summary, changes, context, reason, notes,
+//   eventTag: "",  // ← NEW PARAMETER
+//   pathRequest
+// })
+```
+
+#### Added: Event Listeners (Lines 3217-3243)
+```javascript
+// Wire up tag selector UI:
+tagSelectorToggle.addEventListener("change", ...)
+  └─ Shows/hides tag selector panel
+
+tagSearchInput.addEventListener("input", ...)
+  └─ Debounced 150ms, calls renderTagSuggestions()
+```
+
+---
+
+### 2️⃣ `web/control/index.html` (UI Markup)
+
+#### Removed (Old Complex Structure)
+```html
+<!-- DELETED: Complex nested event selectors -->
+<div class="reason-lock-controls-grid">
+  <select id="categorySelect"></select>
+  <select id="eventSelect"></select>
+  <select id="subeventSelect"></select>
+  <select id="eventModeSelect"></select>
+  <input id="seasonInput">
+  <input id="sessionInput">
+</div>
+
+<!-- DELETED: Confusing reason builder rows -->
+<select id="reasonTemplateSelect"></select>
+<input id="reasonDetailInput">
+<button id="useReasonTemplateBtn"></button>
+
+<select id="usedReasonSelect"></select>
+<button id="applyUsedReasonBtn"></button>
+```
+
+#### Replace With (New 3-Step Form)
+```html
+<!-- NEW: Simple 3-step form structure -->
+<div class="quick-scoring-form">
+
+  <!-- STEP 1: Reason -->
+  <div class="form-step">
+    <label class="form-label">Step 1: Select Reason</label>
+    <select id="reasonTemplateSelect"></select>
+    <input id="customReasonInput" placeholder="Or type custom reason...">
+  </div>
+
+  <!-- STEP 2: Details -->
+  <div class="form-step">
+    <label class="form-label">Step 2: Optional Details</label>
+    <input id="notesInput" placeholder="Notes (who, what, detail)">
+  </div>
+
+  <!-- STEP 3: Tag (Collapsible) -->
+  <div class="form-step form-step-expand">
+    <label class="expand-toggle">
+      <input type="checkbox" id="tagSelectorToggle" />
+      <span>Step 3: Tag Event (Optional)</span>
+      <span class="expand-icon">▶</span>
+    </label>
+
+    <div class="tag-selector-section" hidden id="tagSelectorPanel">
+      <input id="tagSearchInput" placeholder="Search or add tag...">
+      <div id="tagSuggestions"></div>
+      <div id="selectedTags" class="tag-chips"></div>
+    </div>
+  </div>
+
+</div>
+```
+
+---
+
+### 3️⃣ `web/control/control.css` (Styling)
+
+#### Added (Lines 1614-1705)
+```css
+/* Form Layout */
+.quick-scoring-form { display: grid; gap: 14px; }
+.form-step { display: grid; gap: 8px; }
+.form-label { font-size: 12px; text-transform: uppercase; color: var(--muted); }
+
+/* Expand Toggle */
+.expand-toggle { display: flex; gap: 8px; cursor: pointer; }
+.expand-icon { transition: transform 200ms ease; }
+.expand-toggle input:checked ~ .expand-icon { transform: rotate(90deg); }
+
+/* Tag Suggestions */
+.tag-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-suggestion-item {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-tint);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.tag-suggestion-item:hover { background: var(--accent); color: white; }
+
+/* Tag Chips */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+.tag-chip-remove { cursor: pointer; background: none; border: 0; color: white; }
+
+/* Animations */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+```
+
+---
+
+## Summary by Impact
+
+### 🔴 Removed (Breaking Changes)
+- ❌ Blocking "Start Context" requirement
+- ❌ Forced event category/event/subevent selection
+- ❌ Session name requirement for one-time events
+
+### 🟢 Added (New Features)
+- ✅ Fuzzy event matching (catches typos)
+- ✅ Collapsible tag selector
+- ✅ Event tag data fields in Firestore
+- ✅ Tag chips UI
+- ✅ Automatic context creation
+
+### 🟡 Modified (Behavior Changes)
+- 🔄 Scoring now works immediately (before: blocked)
+- 🔄 Events now optional tags (before: required structure)
+- 🔄 Reason simplified (before: complex builder)
+
+### 🔵 Preserved (Unchanged)
+- ✓ House scoring system
+- ✓ Quick buttons (±50, ±30, etc)
+- ✓ History tracking
+- ✓ Approval queue
+- ✓ Backup/restore
+- ✓ All permissions system
+- ✓ Data format (backward compatible)
+
+---
+
+## Lines of Code
+
+| File | Added | Modified | Deleted | Net |
+|------|-------|----------|---------|-----|
+| control.js | +240 | +8 | 0 | +248 |
+| index.html | 0 | ~60 | ~60 | 0 |
+| control.css | +92 | 0 | 0 | +92 |
+
+**Total**: ~340 lines added/modified across 3 files
+
+---
+
+## Testing Points
+
+✅ verify each line of code by searching/clicking:
+
+1. **Fuzzy matching**: Type "voleyball" in tag search → should suggest "Volleyball"
+2. **No context gate**: Click house button without expanding tag → should score
+3. **Tag storage**: Check Firestore → entries should have `eventTag` field
+4. **Chips work**: Click suggestion → should appear as blue chip
+5. **Tag removal**: Click ✕ → chip disappears
+6. **Mobile**: Expand/collapse on small screen → smooth
+
+---
+
+## Deployment Commands
+
+```bash
+# After testing locally, deploy:
+firebase deploy --only firestore:rules
+
+# Verify deployment:
+firebase firestore:describe-indexes
+
+# Monitor in console:
+firebase functions:log
+```
+
+---
+
+## Reference: How Tags Flow Through System
+
+```
+User Types "Basketball"
+  ↓
+renderTagSuggestions(input="Basketball")
+  ↓
+fuzzyMatchEventTag("basketball", eventCatalog)
+  ↓
+normalizeTag("basketball") → finds "basketball" in catalog at 98%
+  ↓
+Shows suggestion: "Basketball (98%)"
+  ↓
+User clicks suggestion
+  ↓
+addTagChip("Basketball") → creates <div class="tag-chip">Basketball ×</div>
+  ↓
+User clicks house button to score
+  ↓
+submitScoringAction()
+  ↓
+getSelectedTags() → returns ["Basketball"]
+  ↓
+passes eventTag: "Basketball" to applyDirectScoreAction()
+  ↓
+buildAppliedAuditEntry() stores:
+  {
+    eventTag: "Basketball",
+    eventTagNormalized: "basketball",
+    ...rest of audit data
+  }
+  ↓
+Firestore saves entry
+  ↓
+✅ Score shows in history with tag
+```
+
+---
+
+## The Three Key Changes
+
+### 1. Context is Now Optional
+```
+BEFORE: Must set → blocks scoring
+AFTER:  Auto-created → doesn't block
+```
+
+### 2. Events Are Now Tags
+```
+BEFORE: Rigid hierarchy (Category > Event > SubEvent)
+AFTER:  Flat flexible tags with fuzzy matching
+```
+
+### 3. UI is Now Simple
+```
+BEFORE: 20+ visible controls, 8+ required steps
+AFTER:  5 controls visible, 2 required steps (3rd optional)
+```
+
+---
+
+**Everything is production-ready. Just test and deploy!** 🚀

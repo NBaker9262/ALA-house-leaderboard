@@ -319,11 +319,36 @@ let tagSearchTimer = null;
 let localState = defaultLocalState();
 let lastHelpFocus = null;
 
+// Offline support
+let isOnline = navigator.onLine;
+let pendingOfflineActions = [];
+const OFFLINE_STORAGE_KEY = 'house-points-pending-actions';
+const OFFLINE_SYNC_INTERVAL = 5000; // Check for sync every 5 seconds
+
+// Track online/offline status
+window.addEventListener('online', handleOnline);
+window.addEventListener('offline', handleOffline);
+
+// Listen for service worker messages
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data.type === 'OFFLINE_STATUS_CHANGED') {
+      isOnline = event.data.isOnline;
+      updateOfflineIndicator();
+      if (event.data.isOnline) {
+        syncPendingOfflineActions();
+      }
+    }
+  });
+}
+
 if (!TEST_MODE) {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
   scoresDoc = doc(db, "leaderboard", "scores");
+  // Load any pending offline actions
+  pendingOfflineActions = loadPendingActionsFromStorage();
 }
 
 renderHouseCards();
@@ -495,7 +520,116 @@ function updateBusyState(delta) {
   document.body.classList.toggle("is-busy", pendingWrites > 0);
 }
 
-function safeId(value) {
+function handleOnline() {
+  isOnline = true;
+  updateOfflineIndicator();
+  syncPendingOfflineActions();
+}
+
+function handleOffline() {
+  isOnline = false;
+  updateOfflineIndicator();
+}
+
+function updateOfflineIndicator() {
+  const syncStatus = document.getElementById("syncStatus");
+  if (!syncStatus) return;
+
+  if (!isOnline) {
+    syncStatus.textContent = "Offline - Changes will sync when online";
+    syncStatus.setAttribute("data-tone", "warn");
+    document.body.classList.add("is-offline");
+  } else if (pendingOfflineActions.length > 0) {
+    syncStatus.textContent = `Syncing ${pendingOfflineActions.length} pending action${pendingOfflineActions.length !== 1 ? 's' : ''}...`;
+    syncStatus.setAttribute("data-tone", "neutral");
+  } else {
+    syncStatus.textContent = "Connected to live scores...";
+    syncStatus.setAttribute("data-tone", "success");
+    document.body.classList.remove("is-offline");
+  }
+}
+
+function queueOfflineAction(actionData) {
+  if (isOnline) {
+    return Promise.resolve(true);
+  }
+
+  const action = {
+    id: `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    timestamp: Date.now(),
+    ...actionData
+  };
+
+  pendingOfflineActions.push(action);
+  savePendingActionsToStorage();
+  updateOfflineIndicator();
+
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    const channel = new MessageChannel();
+    navigator.serviceWorker.controller.postMessage(
+      { type: 'QUEUE_OFFLINE_ACTION', action },
+      [channel.port2]
+    );
+  }
+
+  return Promise.resolve(false);
+}
+
+function savePendingActionsToStorage() {
+  try {
+    localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(pendingOfflineActions));
+  } catch (e) {
+    console.warn('Failed to save pending actions to storage:', e);
+  }
+}
+
+function loadPendingActionsFromStorage() {
+  try {
+    const stored = localStorage.getItem(OFFLINE_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    console.warn('Failed to load pending actions from storage:', e);
+    return [];
+  }
+}
+
+async function syncPendingOfflineActions() {
+  if (pendingOfflineActions.length === 0) {
+    updateOfflineIndicator();
+    return;
+  }
+
+  updateOfflineIndicator();
+  let syncedCount = 0;
+
+  for (const action of pendingOfflineActions) {
+    try {
+      if (action.type === 'score') {
+        await withWrite(async () => {
+          await submitHouseDelta(action.house, action.delta);
+        });
+        syncedCount++;
+      } else if (action.type === 'proposal') {
+        await withWrite(async () => {
+          await submitProposal(action.proposal);
+        });
+        syncedCount++;
+      }
+    } catch (e) {
+      console.warn(`Failed to sync offline action ${action.id}:`, e);
+    }
+  }
+
+  pendingOfflineActions = pendingOfflineActions.slice(syncedCount);
+  savePendingActionsToStorage();
+  updateOfflineIndicator();
+
+  if (syncedCount > 0) {
+    showToast(`Synced ${syncedCount} pending action${syncedCount !== 1 ? 's' : ''}`, "success");
+  }
+}
+
+
   return String(value || "")
     .toLowerCase()
     .trim()
@@ -1440,6 +1574,62 @@ function syncPermissionControlledUi() {
   renderWorkspace();
 }
 
+function renderQuickStats() {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayStartMs = todayStart.getTime();
+
+  // Calculate today's points
+  const appliedEntries = auditEntries.filter(entry => String(entry.status || "applied") === "applied");
+  const todayTotalPoints = appliedEntries
+    .filter(entry => Number(entry.createdAtMs || 0) >= todayStartMs)
+    .reduce((sum, entry) => sum + changeMagnitude(entry.changes || {}), 0);
+
+  // Find current leader
+  let leaderName = "--";
+  let leaderPoints = -1;
+  for (const [house, points] of Object.entries(currentScores)) {
+    if (points > leaderPoints) {
+      leaderPoints = points;
+      leaderName = house.charAt(0).toUpperCase() + house.slice(1);
+    }
+  }
+
+  // Calculate week trend
+  const weekCutoff = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+  const weekPoints = appliedEntries
+    .filter(entry => Number(entry.createdAtMs || 0) >= weekCutoff)
+    .reduce((sum, entry) => sum + changeMagnitude(entry.changes || {}), 0);
+
+  const lastWeekCutoff = weekCutoff - (7 * 24 * 60 * 60 * 1000);
+  const lastWeekPoints = appliedEntries
+    .filter(entry => Number(entry.createdAtMs || 0) >= lastWeekCutoff && Number(entry.createdAtMs || 0) < weekCutoff)
+    .reduce((sum, entry) => sum + changeMagnitude(entry.changes || {}), 0);
+
+  let trend = "→";
+  if (weekPoints > lastWeekPoints) {
+    trend = "↑";
+  } else if (weekPoints < lastWeekPoints) {
+    trend = "↓";
+  }
+
+  // Count active houses (with any points)
+  const activeHouses = Object.values(currentScores).filter(pts => pts > 0).length;
+
+  // Update DOM
+  const todayEl = document.getElementById("todayPointsCount");
+  if (todayEl) todayEl.innerHTML = String(todayTotalPoints);
+
+  const leaderEl = document.getElementById("currentLeaderName");
+  if (leaderEl) leaderEl.innerHTML = leaderName;
+
+  const trendEl = document.getElementById("weekTrendIndicator");
+  if (trendEl) trendEl.innerHTML = trend;
+
+  const activeEl = document.getElementById("activeHousesCount");
+  if (activeEl) activeEl.innerHTML = String(activeHouses);
+}
+
 function renderHistoryStats() {
   const applied = auditEntries.filter(entry => String(entry.status || "applied") === "applied");
   const pending = pendingProposals.filter(proposal => proposal.status === "pending");
@@ -1689,6 +1879,7 @@ function renderStudentLookupResults() {
 }
 
 function refreshAllUi() {
+  renderQuickStats();
   renderHistoryStats();
   renderHistoryList();
   renderActivityList();

@@ -5,3 +5,12 @@ node_modules/
 backups/
 history-backup.json
 firebase-debug.log
+*.mhtml
+.env
+.env.*
+*.local
+scripts/admin/users.local.json
+scripts/admin/*-adc.json
+*.key.json
+*service-account*.json
+*credentials*.json

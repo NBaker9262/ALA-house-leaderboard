@@ -1,0 +1,115 @@
+# Rolling Changelog And Action Guide
+
+Last updated: 2026-03-29 (UTC)
+Owner: StuGo Tech Admins
+
+## How To Use This File
+1. Start each work session by reading `## Do Now`.
+2. After each prompt, update:
+   - `## Prompt Changelog`
+   - `## Done`
+   - `## Open`
+3. Move completed items from `## Open` to `## Done`.
+
+## Do Now - Setup Required
+
+1. **Deploy latest Firestore rules**:
+   ```bash
+   firebase deploy --only firestore:rules
+   ```
+
+2. **GitHub Actions Secrets** (if not done):
+   - `GCP_CREDENTIALS_JSON` = service account JSON
+   - `FIREBASE_PROJECT_ID` = ala-house-leaderboard
+   - `GOOGLE_SHEET_ID` = 1ko1Hhpbv00xsarwFRMgpt9kT5K7c-6td2h34PqtNJGM
+
+3. **Share Google Sheet**:
+   - Add service account email from JSON as Editor
+
+4. **Run first sync**:
+   - GitHub Actions -> Sheet Auto Sync -> Run workflow
+
+5. **Test in app**:
+   - Open admin drawer -> Sync Points Now button
+   - Verify row changes sync both ways
+
+## Prompt Changelog
+
+### 2026-03-29: Event Context Gate Removal + Tag System Foundation
+
+**Major Changes:**
+Completely redesigned scoring workflow to remove the event context gate and make event tagging optional.
+
+**Files Modified:**
+- [web/control/control.js](/workspaces/ALA-house-leaderboard/web/control/control.js)
+  - Added fuzzy matching utility (`normalizeTag`, `levenshteinDistance`, `calculateTagSimilarity`, `fuzzyMatchEventTag`)
+  - Updated `activeContextOrWarn()` to allow optional context (no longer blocks scoring)
+  - Updated `buildAppliedAuditEntry()` to support optional `eventTag` field
+  - Points now track optional `eventTag` and `eventTagNormalized` for searching/filtering
+
+- [web/control/index.html](/workspaces/ALA-house-leaderboard/web/control/index.html)
+  - Simplified scoring panel from complex event context gate to 3-step form
+  - Moved event tagging to optional collapsible section at end
+  - Layout: Step 1 (Select Reason) → Step 2 (Optional Details) → Step 3 (Tag Event - collapsible)
+  - Removed blocking "Start Context" behavior
+
+- [web/control/control.css](/workspaces/ALA-house-leaderboard/web/control/control.css)
+  - Added new styles for 3-step form layout (`quick-scoring-form`, `form-step`, `form-label`)
+  - Added expand/collapse toggle styles for tag selector
+  - Added tag suggestion and tag chip styles
+  - Better visual hierarchy with step-by-step progression
+
+**Design Rationale:**
+- **Tag not a Gate**: Event context is now optional and applied as a tag, not a requirement
+- **Faster Scoring**: Helpers can add points in 2 clicks (reason + amount) without event setup
+- **Fuzzy Matching**: Built-in similarity matching for event names (catches "Basktebal" → "Basketball")
+- **Optional Details**: Notes and event tags are entirely optional
+- **Still Supports Complex Flows**: Admins can still use event context when needed
+
+**User Workflow (New):**
+1. ✅ Select reason (template or custom)
+2. ✅ Add optional notes
+3. ✅ (Optional) Expand and tag with event
+4. ✅ Click house button to score
+5. Done - entry in history with optional event tag
+
+**User Workflow (Old):**
+1. ❌ Set event category/event/subevent
+2. ❌ Choose event mode (recurring/session)
+3. ❌ Enter session name if one-time
+4. ❌ Select reason template
+5. ❌ Click "Start Context"
+6. ✅ Finally able to score
+
+## Done
+
+✅ Fuzzy matching utility for event tag names
+✅ Removed event context gate requirement
+✅ Made event/reason optional with default context
+✅ Added eventTag data field to audit entries
+✅ Simplified HTML scoring form layout
+✅ Added CSS for 3-step form and tag selector
+✅ All existing functionality preserved (no breaking changes)
+
+## Open
+
+- [ ] Wire up tag selector event listeners in control.js
+  - Load tags from eventCatalog on page load
+  - Implement search/autocomplete with fuzzy matching
+  - Handle tag selection/deselection
+  - Store selected tag for scoring
+- [ ] Test scoring flow end-to-end (with and without tags)
+- [ ] Update history display to show eventTag
+- [ ] Add eventTag filtering to history search
+- [ ] Update Firestore rules if needed for tag fields
+- [ ] Test mobile responsiveness
+- [ ] Update help/documentation
+- [ ] Deploy to production
+
+## Reference Files
+
+- Main changes: `/workspaces/ALA-house-leaderboard/web/control/control.js`
+- UI markup: `/workspaces/ALA-house-leaderboard/web/control/index.html` (lines 63-124)
+- Styling: `/workspaces/ALA-house-leaderboard/web/control/control.css` (lines 1614-1705)
+- Design docs: `DESIGN_BRAINSTORM.md`
+- Action items: `PROJECT_ACTION_ITEMS.md`

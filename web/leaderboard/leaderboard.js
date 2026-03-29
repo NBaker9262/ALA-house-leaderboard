@@ -1,6 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
+const MODE_PARAM = new URLSearchParams(window.location.search).get("mode");
+const TEST_MODE = MODE_PARAM === "test";
+const TEST_STORAGE_KEY = "ala.house.leaderboard.local.test.v1";
+const TEST_BROADCAST_CHANNEL = "ala.house.leaderboard.local.test.channel.v1";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
   authDomain: "ala-house-leaderboard.firebaseapp.com",
@@ -10,9 +15,15 @@ const firebaseConfig = {
   appId: "1:827317744881:web:c8518ba6523610ab006550"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const scoresDoc = doc(db, "leaderboard", "scores");
+let app = null;
+let db = null;
+let scoresDoc = null;
+
+if (!TEST_MODE) {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  scoresDoc = doc(db, "leaderboard", "scores");
+}
 const chartArea = document.querySelector(".chart-area");
 const grid = document.querySelector(".y-grid");
 
@@ -52,6 +63,74 @@ const EFFECT_TIMING = {
   confettiDelayMs: 0
 };
 const GRID_STEP_POINTS = 100;
+
+function readLocalTestState() {
+  try {
+    const raw = localStorage.getItem(TEST_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function scoresFromData(data) {
+  return {
+    red: Math.max(0, Number(data?.red) || 0),
+    white: Math.max(0, Number(data?.white) || 0),
+    blue: Math.max(0, Number(data?.blue) || 0),
+    silver: Math.max(0, Number(data?.silver) || 0)
+  };
+}
+
+function applyValues(values) {
+  for (const key of Object.keys(values)) {
+    labels[key].textContent = values[key];
+  }
+
+  updateHeights(values);
+
+  if (!lastValues) {
+    lastValues = { ...values };
+    return;
+  }
+
+  const deltas = Object.keys(values).map(house => ({
+    house,
+    delta: values[house] - (lastValues[house] ?? 0)
+  }));
+
+  const biggestGain = deltas.reduce((best, current) => {
+    if (!best || current.delta > best.delta) return current;
+    return best;
+  }, null);
+
+  lastValues = { ...values };
+
+  if (!biggestGain || biggestGain.delta <= 0) return;
+  if (biggestGain.house === lastConfettiHouse && biggestGain.delta < 1) return;
+
+  lastConfettiHouse = biggestGain.house;
+
+  const colorMap = {
+    red: "#ea0125",
+    white: "#fffeff",
+    blue: "#005ab5",
+    silver: "#a7a7aa"
+  };
+
+  const confettiColor = colorMap[biggestGain.house];
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) return;
+
+  setTimeout(() => {
+    confetti({ particleCount: 100, spread: 60, origin: { y: 0.62 }, colors: [confettiColor] });
+    confetti({ particleCount: 55, spread: 50, origin: { x: 0, y: 0.82 }, angle: 60, colors: [confettiColor] });
+    confetti({ particleCount: 55, spread: 50, origin: { x: 1, y: 0.82 }, angle: 120, colors: [confettiColor] });
+  }, EFFECT_TIMING.confettiDelayMs);
+}
 
 function getIconGapPx() {
   const value = getComputedStyle(document.documentElement).getPropertyValue("--icon-gap");
@@ -142,59 +221,28 @@ for (const icon of Object.values(icons)) {
   }
 }
 
-onSnapshot(scoresDoc, snap => {
-  if (!snap.exists()) return;
-  const data = snap.data();
-
-  const values = {
-    red: Math.max(0, Number(data.red) || 0),
-    white: Math.max(0, Number(data.white) || 0),
-    blue: Math.max(0, Number(data.blue) || 0),
-    silver: Math.max(0, Number(data.silver) || 0)
+if (TEST_MODE) {
+  const refreshLocal = () => {
+    const localState = readLocalTestState() || {};
+    applyValues(scoresFromData(localState));
   };
 
-  for (const key of Object.keys(values)) {
-    labels[key].textContent = values[key];
-  }
-
-  updateHeights(values);
-
-  if (!lastValues) {
-    lastValues = { ...values };
-    return;
-  }
-
-  const deltas = Object.keys(values).map(house => ({
-    house,
-    delta: values[house] - (lastValues[house] ?? 0)
-  }));
-
-  const biggestGain = deltas.reduce((best, current) => {
-    if (!best || current.delta > best.delta) return current;
-    return best;
-  }, null);
-
-  lastValues = { ...values };
-
-  if (!biggestGain || biggestGain.delta <= 0) return;
-  if (biggestGain.house === lastConfettiHouse && biggestGain.delta < 1) return;
-
-  lastConfettiHouse = biggestGain.house;
-
-  const colorMap = {
-    red: "#ea0125",
-    white: "#fffeff",
-    blue: "#005ab5",
-    silver: "#a7a7aa"
+  const storageHandler = event => {
+    if (event.key !== TEST_STORAGE_KEY) return;
+    refreshLocal();
   };
 
-  const confettiColor = colorMap[biggestGain.house];
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (prefersReducedMotion) return;
+  window.addEventListener("storage", storageHandler);
 
-  setTimeout(() => {
-    confetti({ particleCount: 100, spread: 60, origin: { y: 0.62 }, colors: [confettiColor] });
-    confetti({ particleCount: 55, spread: 50, origin: { x: 0, y: 0.82 }, angle: 60, colors: [confettiColor] });
-    confetti({ particleCount: 55, spread: 50, origin: { x: 1, y: 0.82 }, angle: 120, colors: [confettiColor] });
-  }, EFFECT_TIMING.confettiDelayMs);
-});
+  if (typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel(TEST_BROADCAST_CHANNEL);
+    channel.addEventListener("message", refreshLocal);
+  }
+
+  refreshLocal();
+} else {
+  onSnapshot(scoresDoc, snap => {
+    if (!snap.exists()) return;
+    applyValues(scoresFromData(snap.data()));
+  });
+}

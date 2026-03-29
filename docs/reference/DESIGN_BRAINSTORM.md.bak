@@ -1,0 +1,304 @@
+# UI/UX Redesign Brainstorm
+
+## Problems with Current System
+
+1. **Event Context is a Gate** - Must "Start Context" before scoring; blocks workflow
+2. **Too Many Interdependent Controls** - Reason lock section has 7+ inputs competing for attention
+3. **Reason Selection is Convoluted** - Templates + previous + custom + detail all mixed
+4. **Role Confusion** - Helpers see admin-level complexity
+5. **Event Overlaps** - No fuzzy matching; typos create duplicates (Basketball vs Basktebal)
+6. **History Buried** - Important audit trails hidden in tabs
+7. **Leaderboard Clutter** - Scores shown upfront even when not needed
+8. **No "Other" for One-Offs** - Can't score without matching exact event
+9. **Place Awards Overwhelming** - Takes up valuable space on main view
+
+---
+
+## Design Direction: Tag-Based Scoring, Role-First Layout
+
+### Core Principle
+**Event context is an optional tag applied at the end, not a gate at the start.**
+
+---
+
+## New Scoring Flow (3 Steps + Optional Tag)
+
+```
+HELPERS:
+┌─────────────────────────────────────────┐
+│ STEP 1: Select House                    │
+│ [🏠 Red Panda] [🏠 Polar] ...          │
+├─────────────────────────────────────────┤
+│ STEP 2: Enter Points                    │
+│ Amount: [_______]                       │
+│ Quick:  [+50] [+30] [+15] [+10]        │
+│         [-50] [-30] [-15] [-10]        │
+├─────────────────────────────────────────┤
+│ STEP 3: Select Reason                   │
+│ [🏆 Template: Attendance]               │
+│ [📌 Recent: Assembly Games...]         │
+│ [✏️ Custom: _____________________]     │
+├─────────────────────────────────────────┤
+│ OPTIONAL: Tag Event Type (ⓘ expand)    │
+│ [🎯 Basketball] or [Other: _______]    │
+├─────────────────────────────────────────┤
+│ [✔️ SUBMIT] [✗ CLEAR]                 │
+└─────────────────────────────────────────┘
+
+ADMINS:
+┌──────────────────┬─────────────────────┐
+│ APPROVAL QUEUE   │ DIRECT ADD          │
+│                  │ (Same 3-step form)  │
+│ [⏳ 3 Pending]   │ ...                 │
+│ [✓ Alex: +50]    │                     │
+│ [✗ Jordan: -30]  │                     │
+│                  │                     │
+│ [✔ APPROVE]      │                     │
+│ [✗ REJECT]       │                     │
+└──────────────────┴─────────────────────┘
+```
+
+---
+
+## Event Tagging with Fuzzy Matching
+
+### Tag Matching Logic
+1. **Normalize both**: Strip spaces, lowercase, remove special chars
+   - Input: "Basktebal"
+   - Catalog: "Basketball"
+   - Normalized input: "basktebal"
+   - Normalized catalog: "basketball"
+
+2. **Calculate similarity**: Levenshtein distance or simple char overlap
+   - If similarity > 85%, auto-match
+   - If 70-85%, suggest with confirmation
+   - Below 70%, suggest "Other" option
+
+3. **Recent Tags as Chips**
+   - Show last 5 tags used (per user, per session)
+   - One-click to reapply
+   - Auto-clear after 2 weeks
+
+4. **"Other" Option**
+   - User enters custom tag (e.g., "Mr. Rivera" from sheet)
+   - Tag applies to that entry only
+   - NOT saved to official catalog
+   - Admin can later promote to official event
+
+### Example Fuzzy Matches
+```
+User Input     → Best Match          → Confidence
+"Basktebal"    → "Basketball"       → 95% (auto-match)
+"Voleyball"    → "Volleyball"       → 92% (auto-match)
+"Cheer off"    → "Assembly Cheer Off" → 78% (suggest)
+"Mr Rivera"    → [Other] (custom)   → 0% (no match)
+"RAISE Cards"  → "RAISE Cards"      → 100% (exact)
+```
+
+---
+
+## New UI Layout: Top-Level Organization
+
+### Main Workspace Tabs (4 views)
+1. **Scoring** (default)
+   - 3-step form
+   - Active approval queue count badge
+   - Quick leaderboard peek
+
+2. **Approvals** (admin-only)
+   - Live approval queue
+   - Batch approve/reject
+   - Proposed vs direct-add toggle
+
+3. **History**
+   - Search by: house, reason, tag, author, date
+   - Group by: event tag, date, house
+   - Export to CSV/JSON
+
+4. **Admin** (superadmin-only)
+   - Event catalog management
+   - User roles & permissions
+   - Backup create/restore
+   - Sync status
+
+### Drawers/Modals (Not Full Panels)
+- Event tag selector (collapsible in scoring)
+- Place awards (modal, launched from menu)
+- Student lookup (drawer, from account menu)
+- Help (modal, ? key or button)
+- Sync status (toast or drawer)
+
+---
+
+## CSS/Visual Hierarchy Changes
+
+### Color & Spacing
+- **Primary action** (SUBMIT): Bold, high contrast
+- **Secondary action** (CLEAR): Muted
+- **Quick buttons** (±50 etc): Small, grouped, pill-shaped
+- **Recent chips**: Ghost style, light bg
+- **Status indicators**: Color-coded (pending=yellow, approved=green, rejected=red)
+
+### Component Density
+- **Scoring**: Wide columns with breathing room between sections
+- **History**: Compact rows with expand-on-hover details
+- **Approval queue**: Card-based, shadow on hover, action buttons on side
+
+### Responsive
+- **Desktop**: 2-column layout (queue + add) or full width
+- **Tablet**: Stacked sections with tabs
+- **Mobile**: One section at a time, full width
+
+---
+
+## Data Storage: eventTag Field
+
+### Before (Current)
+```json
+{
+  "id": "points_abc123",
+  "house": "red",
+  "points": 50,
+  "reason": "Basketball - Girls Varsity - First Place",
+  "author": "alice@school.org",
+  "timestamp": 1234567890,
+  "notes": ""
+}
+```
+
+### After (New)
+```json
+{
+  "id": "points_abc123",
+  "house": "red",
+  "points": 50,
+  "reason": "First Place",                    // Simplified
+  "eventTag": "Basketball/Girls Varsity",    // Optional tag
+  "eventTagNormalized": "basketball/girls_varsity",  // For matching
+  "reason_isTemplate": true,
+  "author": "alice@school.org",
+  "timestamp": 1234567890,
+  "notes": "",
+  "isImportedFromSheet": false
+}
+```
+
+---
+
+## Fuzzy Matching Utility
+
+```javascript
+// Normalize tag for matching
+function normalizeTag(tag) {
+  return tag
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')  // Remove special chars
+    .replace(/\s+/g, '');       // Remove spaces
+}
+
+// Simple Levenshtein distance
+function levenshteinDistance(a, b) {
+  // Standard edit distance calculation
+}
+
+// Find best match in catalog
+function fuzzyMatchEventTag(input, catalog) {
+  const normalized = normalizeTag(input);
+  let bestMatch = null;
+  let bestScore = 0;
+
+  catalog.forEach(item => {
+    const catalogNorm = normalizeTag(item.name);
+    const score = 1 - (levenshteinDistance(normalized, catalogNorm) /
+                       Math.max(normalized.length, catalogNorm.length));
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = item;
+    }
+  });
+
+  return { match: bestMatch, confidence: bestScore };
+}
+```
+
+---
+
+## Workflow Changes by Role
+
+### Helper Workflow
+**Before**: Set up event context → Select reason → Add points
+**After**: Select house → Enter points → Select reason → *Optionally* tag event → Submit
+
+**Time saved**: 2-3 clicks; no context setup required
+
+### Admin Workflow
+**Before**: Review reason lock → Add points → Check history → Approve suggestions one-by-one
+**After**: See approval queue immediately → One-click approve/reject → Direct add available on side
+
+**Time saved**: Less tab switching; faster batch approvals
+
+### Superadmin Workflow
+**Before**: Switch to admin drawer → scroll → find settings
+**After**: Click "Admin" tab → All settings in one place
+
+---
+
+## Migration & Backwards Compatibility
+
+1. **Existing Points**: Retroactively parse `reason` field to extract event tag
+   - "Basketball - Girls Varsity - First Place" → eventTag: "Basketball/Girls Varsity"
+
+2. **Recent Reasons**: Build from existing entries, group by tag
+
+3. **Firestore Rules**: Allow both old and new formats (with deprecation warning)
+
+---
+
+## 5 Alternative Approaches (If Tag Matching Doesn't Fit)
+
+### Alt 1: Event Playbook Cards
+Admin creates pre-scored "cards" (e.g., "Basketball Game: +50 all, +30 2nd place")
+Staff just picks card + house. One-click scoring.
+**Pro**: Fastest scoring. **Con**: Requires admin to preplan.
+
+### Alt 2: Time-Block Timeline
+Group scores by event session (Pre-game, Halftime, Finals)
+Auto-group by timestamp proximity to detect same event
+**Pro**: Automatic clustering. **Con**: Relies on timing.
+
+### Alt 3: Rule Engine Mode
+Admin defines scoring rules (e.g., "Any assembly attendance = +10")
+Staff just picks rule + winner; system auto-scores
+**Pro**: Minimal data entry. **Con**: Less flexible for one-offs.
+
+### Alt 4: Wizard Step-Through
+Guided modal: Pick event type → Pick action → Confirm preset bonus → Apply
+**Pro**: Clear workflow. **Con**: Slower if not preset.
+
+### Alt 5: Batch Entry with Validation Engine
+Enter all scores for event, then system validates & detects duplicates/typos
+Tag auto-applies to batch; one submit
+**Pro**: Fewer tangles. **Con**: Upload errors can affect many.
+
+---
+
+## Implementation Priority
+
+1. ✅ **Phase 1**: Add eventTag field, update data model
+2. ✅ **Phase 2**: Build fuzzy matching utility
+3. ✅ **Phase 3**: Refactor scoring form to 3-step
+4. ✅ **Phase 4**: Update history to group/filter by tag
+5. ✅ **Phase 5**: Role-specific layouts (helper vs admin)
+6. ✅ **Phase 6**: CSS polish for visual hierarchy
+7. ⏳ **Phase 7**: Extended features (batch approve, tag promotion, analytics)
+
+---
+
+## Testing Checkpoints
+
+- [ ] Helper can score without setting event context
+- [ ] Fuzzy matching catches common typos
+- [ ] Admin sees approval queue first
+- [ ] History groups by event tag
+- [ ] "Other" tags store but don't pollute catalog
+- [ ] All existing points still readable

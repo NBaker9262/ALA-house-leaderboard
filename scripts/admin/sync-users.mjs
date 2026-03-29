@@ -5,87 +5,110 @@ import path from "node:path";
 
 const projectId = process.env.FIREBASE_PROJECT_ID || "ala-house-leaderboard";
 const dryRun = !process.argv.includes("--apply");
-const defaultPassword = "StuG0!";
+const defaultPassword = process.env.SYNC_USERS_DEFAULT_PASSWORD || "";
 const firebaseToolsConfigPath = path.join(os.homedir(), ".config", "configstore", "firebase-tools.json");
+const usersConfigPath = process.env.SYNC_USERS_FILE || path.join(process.cwd(), "scripts", "admin", "users.local.json");
 
 const PERMISSIONS = [
   "scoreEdit",
+  "proposePoints",
   "placeAwards",
+  "studentLookup",
+  "approveProposals",
   "historyAccess",
   "restoreHistory",
   "checkpoint",
   "downloadBackup",
   "resetAll",
-  "notes",
   "passwordReset",
-  "simpleToggle",
-  "manageUsers"
+  "manageUsers",
+  "manageCatalog"
 ];
 
 const ROLE_DEFAULTS = {
   superadmin: {
     scoreEdit: true,
+    proposePoints: true,
     placeAwards: true,
+    studentLookup: true,
+    approveProposals: true,
     historyAccess: true,
     restoreHistory: true,
     checkpoint: true,
     downloadBackup: true,
     resetAll: true,
-    notes: true,
     passwordReset: true,
-    simpleToggle: true,
-    manageUsers: true
+    manageUsers: true,
+    manageCatalog: true
   },
   admin: {
     scoreEdit: true,
+    proposePoints: true,
     placeAwards: true,
+    studentLookup: true,
+    approveProposals: true,
     historyAccess: true,
     restoreHistory: true,
     checkpoint: true,
-    downloadBackup: false,
+    downloadBackup: true,
     resetAll: false,
-    notes: true,
     passwordReset: true,
-    simpleToggle: true,
-    manageUsers: false
+    manageUsers: false,
+    manageCatalog: false
   },
   staff: {
     scoreEdit: true,
-    placeAwards: false,
-    historyAccess: false,
+    proposePoints: false,
+    placeAwards: true,
+    studentLookup: true,
+    approveProposals: false,
+    historyAccess: true,
+    restoreHistory: false,
+    checkpoint: true,
+    downloadBackup: false,
+    resetAll: false,
+    passwordReset: true,
+    manageUsers: false,
+    manageCatalog: false
+  },
+  helper: {
+    scoreEdit: false,
+    proposePoints: true,
+    placeAwards: true,
+    studentLookup: true,
+    approveProposals: false,
+    historyAccess: true,
     restoreHistory: false,
     checkpoint: false,
     downloadBackup: false,
     resetAll: false,
-    notes: false,
-    passwordReset: true,
-    simpleToggle: false,
-    manageUsers: false
+    passwordReset: false,
+    manageUsers: false,
+    manageCatalog: false
   }
 };
 
-const users = [
-  { name: "Noah Baker", email: "noahmathmaster@gmail.com", role: "superadmin", preservePassword: true },
-  { name: "Lisl Nixon", email: "lisl.nixon@alaschools.org", role: "admin" },
-  { name: "Emily Cox", email: "ec59654@stu.alaschools.org", role: "admin" },
-  { name: "Wyatt Pulaski", email: "wp76080@stu.alaschools.org", role: "staff" },
-  { name: "Elise Londonson", email: "el71845@stu.alaschools.org", role: "staff" },
-  { name: "Nola Wilson", email: "nw72197@stu.alaschools.org", role: "staff" },
-  { name: "Jibrilla Dartoe", email: "jd71016@stu.alaschools.org", role: "staff" },
-  { name: "Seth Hawkins", email: "sh76075@stu.alaschools.org", role: "staff" },
-  { name: "Kash Cravy", email: "kc73702@stu.alaschools.org", role: "staff" },
-  { name: "Ikponmwosa Obahiagbon (Ikey)", email: "io74755@stu.alaschools.org", role: "staff" },
-  { name: "Daxton Ulrich", email: "du72185@stu.alaschools.org", role: "staff" },
-  { name: "Leia Saielli", email: "ls70990@stu.alaschools.org", role: "staff" },
-  { name: "Alexis Portillo", email: "ap70382@stu.alaschools.org", role: "staff" }
-];
+function loadUsersConfig() {
+  try {
+    const raw = readFileSync(usersConfigPath, "utf8");
+    const parsed = JSON.parse(raw);
+    const value = Array.isArray(parsed) ? parsed : parsed?.users;
+    if (Array.isArray(value)) return value;
+    console.warn(`User config ${usersConfigPath} must be an array or {\"users\": []}.`);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+const users = loadUsersConfig();
 
 function usage() {
-  console.log(`\nUsage:\n  node scripts/sync-users.mjs [--apply]\n  node scripts/sync-users.mjs --list\n  node scripts/sync-users.mjs --email=user@x.com [--set-role=staff|admin|superadmin] [--name="Display Name"] [--grant=p1,p2] [--revoke=p3] [--password=NewPass] [--preserve-password] [--apply]\n\nDefaults:\n  - No --apply => dry-run\n  - Bulk sync resets all non-Noah passwords to ${defaultPassword}\n\nPermissions:\n  ${PERMISSIONS.join(", ")}\n`);
+  console.log(`\nUsage:\n  node scripts/admin/sync-users.mjs [--apply]\n  node scripts/admin/sync-users.mjs --list\n  node scripts/admin/sync-users.mjs --email=user@x.com [--set-role=helper|staff|admin|superadmin] [--name="Display Name"] [--grant=p1,p2] [--revoke=p3] [--password=NewPass] [--preserve-password] [--apply]\n\nDefaults:\n  - No --apply => dry-run\n  - Bulk user list loaded from ${usersConfigPath}\n  - Default password loaded from SYNC_USERS_DEFAULT_PASSWORD when provided\n\nPermissions:\n  ${PERMISSIONS.join(", ")}\n`);
 }
 
 function normalizeRole(role) {
-  return role === "superadmin" || role === "admin" || role === "staff" ? role : "staff";
+  return role === "superadmin" || role === "admin" || role === "staff" || role === "helper" ? role : "staff";
 }
 
 function sanitizePermissions(raw) {
@@ -120,9 +143,10 @@ function claimsFor(role, permissions) {
     role,
     admin: role === "admin" || role === "superadmin",
     superadmin: role === "superadmin",
+    helper: role === "helper",
     canResetAll: Boolean(permissions.resetAll),
     canMassChange: Boolean(permissions.manageUsers || permissions.resetAll),
-    simpleViewLocked: role === "staff",
+    simpleViewLocked: role === "staff" || role === "helper",
     permissions
   };
 }
@@ -220,12 +244,18 @@ function ensureAdcFromFirebaseCli() {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
   const refreshToken = firebaseCliRefreshToken();
   if (!refreshToken) return;
+  const clientId = process.env.FIREBASE_CLIENT_ID || "";
+  const clientSecret = process.env.FIREBASE_CLIENT_SECRET || "";
+  if (!clientId || !clientSecret) {
+    console.warn("Firebase CLI token found, but FIREBASE_CLIENT_ID/FIREBASE_CLIENT_SECRET are missing. Skipping temporary ADC generation.");
+    return;
+  }
 
   const tmpAdcPath = path.join(os.tmpdir(), "ala-house-leaderboard-firebase-cli-adc.json");
   const adcPayload = {
     type: "authorized_user",
-    client_id: process.env.FIREBASE_CLIENT_ID || "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
-    client_secret: process.env.FIREBASE_CLIENT_SECRET || "j9iVZfS8kkCEFUPaAeJV0sAi",
+    client_id: clientId,
+    client_secret: clientSecret,
     refresh_token: refreshToken
   };
   writeFileSync(tmpAdcPath, JSON.stringify(adcPayload, null, 2), "utf8");
@@ -260,11 +290,15 @@ async function readExistingProfile(uid) {
 function buildPlan(entry, args, existingRecord, existingProfile) {
   const email = entry.email.toLowerCase();
   const role = normalizeRole(args.setRole || entry.role || existingProfile?.role || "staff");
+  const existingRole = normalizeRole(existingProfile?.role || "staff");
   const existingOverrides = sanitizePermissions(existingProfile?.permissionOverrides);
   const existingAbsolute = sanitizePermissions(existingProfile?.permissions);
-  const baseAbsolute = Object.keys(existingAbsolute).length
-    ? existingAbsolute
-    : resolvePermissions(role, existingOverrides);
+  const roleChanged = role !== existingRole;
+  const baseAbsolute = roleChanged
+    ? resolvePermissions(role)
+    : Object.keys(existingAbsolute).length
+      ? existingAbsolute
+      : resolvePermissions(role, existingOverrides);
 
   const withGrants = { ...baseAbsolute };
   args.grant.forEach(key => { withGrants[key] = true; });
@@ -279,13 +313,19 @@ function buildPlan(entry, args, existingRecord, existingProfile) {
   if (args.password !== null) {
     password = args.password;
   } else if (!args.preservePassword && !entry.preservePassword) {
-    password = defaultPassword;
+    password = defaultPassword || null;
   }
 
   return {
     email,
     role,
     name,
+    accountGroupId: typeof entry.accountGroupId === "string" && entry.accountGroupId.trim()
+      ? entry.accountGroupId.trim()
+      : (typeof existingProfile?.accountGroupId === "string" ? existingProfile.accountGroupId : ""),
+    primaryEmail: typeof entry.primaryEmail === "string" && entry.primaryEmail.trim()
+      ? entry.primaryEmail.trim().toLowerCase()
+      : (typeof existingProfile?.primaryEmail === "string" ? existingProfile.primaryEmail.toLowerCase() : ""),
     permissions,
     permissionOverrides,
     password,
@@ -297,10 +337,14 @@ async function applyPlan(existingRecord, plan) {
   let userRecord = existingRecord;
 
   if (!userRecord) {
+    const createPassword = plan.password || defaultPassword;
+    if (!createPassword) {
+      throw new Error(`No password available for new user ${plan.email}. Pass --password or set SYNC_USERS_DEFAULT_PASSWORD.`);
+    }
     const createPayload = {
       email: plan.email,
       displayName: plan.name,
-      password: plan.password || defaultPassword
+      password: createPassword
     };
     userRecord = await auth.createUser(createPayload);
   } else {
@@ -317,6 +361,8 @@ async function applyPlan(existingRecord, plan) {
     name: plan.name,
     email: plan.email,
     role: plan.role,
+    accountGroupId: plan.accountGroupId || null,
+    primaryEmail: plan.primaryEmail || plan.email,
     permissions: plan.permissions,
     permissionOverrides: plan.permissionOverrides,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),

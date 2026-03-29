@@ -23,12 +23,18 @@ function ensureAdcFromFirebaseCli() {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
   const refreshToken = firebaseCliRefreshToken();
   if (!refreshToken) return;
+  const clientId = process.env.FIREBASE_CLIENT_ID || "";
+  const clientSecret = process.env.FIREBASE_CLIENT_SECRET || "";
+  if (!clientId || !clientSecret) {
+    console.warn("Firebase CLI token found, but FIREBASE_CLIENT_ID/FIREBASE_CLIENT_SECRET are missing. Skipping temporary ADC generation.");
+    return;
+  }
 
   const tmpAdcPath = path.join(os.tmpdir(), "ala-house-leaderboard-firebase-cli-adc.json");
   const adcPayload = {
     type: "authorized_user",
-    client_id: process.env.FIREBASE_CLIENT_ID || "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
-    client_secret: process.env.FIREBASE_CLIENT_SECRET || "j9iVZfS8kkCEFUPaAeJV0sAi",
+    client_id: clientId,
+    client_secret: clientSecret,
     refresh_token: refreshToken
   };
   writeFileSync(tmpAdcPath, JSON.stringify(adcPayload, null, 2), "utf8");
