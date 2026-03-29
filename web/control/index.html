@@ -52,6 +52,9 @@
     </div>
 
     <div class="topbar-actions">
+      <button id="helpOpenBtn" class="icon-btn" type="button" aria-label="Open help" title="Help" data-action-control>
+        <span aria-hidden="true">?</span>
+      </button>
       <button id="adminMenuBtn" class="icon-btn" type="button" aria-label="Open admin management" title="Admin Management" data-action-control>
         <span class="icon-bars" aria-hidden="true"></span>
       </button>
@@ -106,15 +109,81 @@
         <div id="recentReasons" class="reason-pill-row"></div>
       </div>
 
+      <div class="form-step" hidden>
+        <label class="form-label">Direct Reason Input</label>
+        <input id="reasonInput" type="text" maxlength="100" placeholder="Direct reason entry..." data-action-control>
+      </div>
+
+      <div class="form-step" hidden>
+        <label class="form-label">Reason Details</label>
+        <input id="reasonDetailInput" type="text" maxlength="200" placeholder="Additional details..." data-action-control>
+      </div>
+
+      <div class="form-step" hidden>
+        <label class="form-label">Used Reasons</label>
+        <select id="usedReasonSelect" data-action-control>
+          <option value="">Select from history</option>
+        </select>
+        <button id="applyUsedReasonBtn" class="btn btn-muted btn-mini" type="button" data-action-control>Apply</button>
+      </div>
+
+      <div class="form-step" hidden>
+        <label class="form-label">Reason Template</label>
+        <button id="useReasonTemplateBtn" class="btn btn-muted btn-mini" type="button" data-action-control>Use Template</button>
+      </div>
+
       <div class="form-step">
         <label class="form-label">Step 2: Optional Details</label>
         <input id="notesInput" type="text" maxlength="160" placeholder="Notes (who, what, detail)" data-action-control>
       </div>
 
+      <div class="form-step">
+        <label class="form-label">Step 3: Event Category</label>
+        <select id="categorySelect" data-action-control>
+          <option value="">Select category...</option>
+        </select>
+      </div>
+
+      <div class="form-step">
+        <label class="form-label">Event Type</label>
+        <select id="eventSelect" data-action-control>
+          <option value="">Select event...</option>
+        </select>
+      </div>
+
+      <div class="form-step">
+        <label class="form-label">Event SubType</label>
+        <select id="subeventSelect" data-action-control>
+          <option value="">Select subevent...</option>
+        </select>
+      </div>
+
+      <div class="form-step">
+        <label class="form-label">Event Mode</label>
+        <select id="eventModeSelect" data-action-control>
+          <option value="event">Event (One-time)</option>
+          <option value="session">Session (Recurring)</option>
+        </select>
+      </div>
+
+      <div class="form-step">
+        <label class="form-label">Season/Year</label>
+        <input id="seasonInput" type="text" maxlength="40" placeholder="2025-2026" data-action-control>
+      </div>
+
+      <div class="form-step" hidden>
+        <label class="form-label">Session</label>
+        <input id="sessionInput" type="text" maxlength="40" placeholder="Session name..." data-action-control>
+      </div>
+
+      <div class="form-step" hidden>
+        <button id="requestPathBtn" class="btn btn-muted" type="button" data-action-control>Propose New Tag</button>
+      </div>
+
       <div class="form-step form-step-expand" id="tagSelectorExpand">
         <label class="form-label expand-toggle">
           <input type="checkbox" id="tagSelectorToggle" />
-          <span>Step 3: Tag Event (Optional)</span>
+          <span>Step 4: Tag Event (Optional)</span>
           <span class="expand-icon">▶</span>
         </label>
 
@@ -472,6 +541,8 @@
     <h4>Recent Activity</h4>
     <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
   </section>
+
+  <div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
   <script type="module" src="control.js"></script>

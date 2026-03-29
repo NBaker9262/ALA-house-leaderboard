@@ -502,6 +502,7 @@ function renderWorkspace() {
 }
 
 function showToast(message, tone = "success") {
+  if (!dom.toastContainer) return;
   const toast = document.createElement("div");
   toast.className = `toast toast-${tone}`;
   toast.textContent = message;
@@ -638,7 +639,9 @@ function normalizeId(value) {
     .slice(0, 40);
 }
 
-const safeId = normalizeId;
+function safeId(value) {
+  return normalizeId(value);
+}
 
 function chunkArray(items, size) {
   const out = [];
@@ -866,6 +869,7 @@ function getSubeventById(event, subeventId) {
 }
 
 function selectedRoute() {
+  if (!dom.categorySelect || !dom.eventSelect || !dom.subeventSelect) return null;
   const category = getCategoryById(dom.categorySelect.value);
   const event = getEventById(category, dom.eventSelect.value);
   const subevent = getSubeventById(event, dom.subeventSelect.value);
@@ -881,6 +885,7 @@ function selectedRoute() {
 }
 
 function buildContextFromInputs() {
+  if (!dom.reasonInput || !dom.notesInput || !dom.eventModeSelect || !dom.seasonInput || !dom.sessionInput) return null;
   const route = selectedRoute();
   if (!route) return null;
   const reason = String(dom.reasonInput.value || "").trim();
@@ -902,6 +907,7 @@ function buildContextFromInputs() {
 }
 
 function updateContextSummary() {
+  if (!dom.contextSummary || !dom.reasonLockState) return;
   if (!activeContext) {
     dom.contextSummary.textContent = "No active event context.";
     dom.reasonLockState.textContent = "Locked";
@@ -916,6 +922,7 @@ function updateContextSummary() {
 }
 
 function renderReasonTracker() {
+  if (!dom.reasonTracker) return;
   const totalByHouse = { red: 0, white: 0, blue: 0, silver: 0 };
   const sinceMs = Date.now() - (2 * 60 * 60 * 1000);
   const relevant = auditEntries.filter(entry => {
@@ -1011,6 +1018,7 @@ function reasonTemplateSuggestions(route) {
 }
 
 function renderReasonTemplateOptions() {
+  if (!dom.reasonTemplateSelect) return;
   const route = selectedRoute();
   const options = reasonTemplateSuggestions(route);
   const previous = String(dom.reasonTemplateSelect.value || "");
@@ -1065,6 +1073,7 @@ function recentReasonsForRoute(limitCount = 24) {
 }
 
 function renderUsedReasonSelect() {
+  if (!dom.usedReasonSelect) return;
   const reasons = recentReasonsForRoute(24);
   const currentValue = String(dom.usedReasonSelect.value || "");
   dom.usedReasonSelect.innerHTML = '<option value="">Previously used reasons</option>';
@@ -1080,6 +1089,7 @@ function renderUsedReasonSelect() {
 }
 
 function applySelectedReason() {
+  if (!dom.customReasonInput || !dom.usedReasonSelect || !dom.reasonInput) return;
   const customReason = String(dom.customReasonInput.value || "").trim();
   const usedReason = String(dom.usedReasonSelect.value || "").trim();
   const selected = customReason || usedReason;
@@ -1092,6 +1102,7 @@ function applySelectedReason() {
 }
 
 function renderRecentReasonChips() {
+  if (!dom.recentReasons) return;
   const route = selectedRoute();
   if (!route) {
     dom.recentReasons.innerHTML = "";
@@ -1493,6 +1504,11 @@ function resetSignedOutUi() {
 }
 
 function syncPermissionControlledUi() {
+  // Guard: ensure critical DOM elements exist
+  if (!dom.reasonCommitBtn || !dom.reasonClearBtn || !dom.categorySelect || !dom.eventSelect || !dom.subeventSelect || !dom.eventModeSelect) {
+    console.warn("Missing critical DOM elements in syncPermissionControlledUi");
+    return;
+  }
   const hasContext = Boolean(activeContext);
   const canDirectScore = can("scoreEdit");
   const canSuggest = can("proposePoints");
@@ -1524,16 +1540,16 @@ function syncPermissionControlledUi() {
 
   dom.reasonCommitBtn.disabled = false;
   dom.reasonClearBtn.disabled = !hasContext;
-  dom.requestPathBtn.disabled = !(can("proposePoints") || can("manageCatalog"));
+  if (dom.requestPathBtn) dom.requestPathBtn.disabled = !(can("proposePoints") || can("manageCatalog"));
   dom.reasonTemplateSelect.disabled = !canContextSetup;
-  dom.reasonDetailInput.disabled = !canContextSetup;
-  dom.useReasonTemplateBtn.disabled = !canContextSetup;
-  dom.usedReasonSelect.disabled = !canContextSetup;
+  if (dom.reasonDetailInput) dom.reasonDetailInput.disabled = !canContextSetup;
+  if (dom.useReasonTemplateBtn) dom.useReasonTemplateBtn.disabled = !canContextSetup;
+  if (dom.usedReasonSelect) dom.usedReasonSelect.disabled = !canContextSetup;
   dom.customReasonInput.disabled = !canContextSetup;
-  dom.applyUsedReasonBtn.disabled = !canContextSetup;
+  if (dom.applyUsedReasonBtn) dom.applyUsedReasonBtn.disabled = !canContextSetup;
   dom.eventModeSelect.disabled = !canContextSetup;
   dom.seasonInput.disabled = !canContextSetup;
-  dom.sessionInput.disabled = dom.eventModeSelect.value !== "session" || !canContextSetup;
+  if (dom.sessionInput) dom.sessionInput.disabled = dom.eventModeSelect.value !== "session" || !canContextSetup;
 
   dom.resetEmailInput.disabled = !can("passwordReset") || TEST_MODE;
   dom.resetPasswordBtn.disabled = !can("passwordReset") || TEST_MODE;
