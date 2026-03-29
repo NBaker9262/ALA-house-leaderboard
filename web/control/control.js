@@ -2843,19 +2843,30 @@ async function roleFromProfile(uid, email) {
   try {
     // First try email-based lookup (most reliable)
     if (email) {
+      console.log("🔎 Looking up profile by email:", email);
       const profilesRef = collection(db, "userProfiles");
       const findQuery = query(profilesRef, where("email", "==", email), limit(1));
       const snapshot = await getDocs(findQuery);
       if (!snapshot.empty) {
-        return normalizeRole(snapshot.docs[0].data()?.role || "");
+        const role = normalizeRole(snapshot.docs[0].data()?.role || "");
+        console.log("✅ Found profile by email with role:", role);
+        return role;
       }
+      console.log("❌ No profile found by email");
     }
     // Fallback to UID-based lookup
+    console.log("🔎 Falling back to UID lookup:", uid);
     const profileRef = doc(db, "userProfiles", uid);
     const snapshot = await getDoc(profileRef);
-    if (!snapshot.exists()) return "";
-    return normalizeRole(snapshot.data()?.role || "");
-  } catch {
+    if (!snapshot.exists()) {
+      console.log("❌ No profile found by UID");
+      return "";
+    }
+    const role = normalizeRole(snapshot.data()?.role || "");
+    console.log("✅ Found profile by UID with role:", role);
+    return role;
+  } catch (error) {
+    console.error("❌ Error fetching profile:", error);
     return "";
   }
 }
@@ -3384,8 +3395,11 @@ function setupEventListeners() {
     }
 
     try {
+      console.log("🔐 Attempting sign-in with:", email);
       await signInWithEmailAndPassword(auth, email, password);
+      console.log("✅ Sign-in successful, waiting for onAuthStateChanged...");
     } catch (error) {
+      console.error("❌ Sign-in error:", error);
       setAuthError(mapAuthError(error));
     } finally {
       dom.signInButton.disabled = false;
@@ -3801,7 +3815,9 @@ function bootAuth() {
   }
 
   onAuthStateChanged(auth, async user => {
+    console.log("🔄 Auth state changed. User:", user ? user.email : "null");
     if (!user) {
+      console.log("📵 No user, showing login box");
       stopLiveListeners();
       dom.loginBox.style.display = "grid";
       dom.mainPanel.style.display = "none";
@@ -3811,14 +3827,18 @@ function bootAuth() {
       return;
     }
 
+    console.log("👤 User authenticated:", user.email);
     const token = await user.getIdTokenResult();
     const role = await resolveAccessRole(user, token.claims || {});
+    console.log("🔍 Resolved role:", role);
     if (!role) {
+      console.error("❌ No role found for user");
       await signOut(auth);
       setAuthError("This account does not have control-panel access.");
       return;
     }
 
+    console.log("✅ Authentication successful, showing dashboard");
     setAuthError("");
     dom.loginBox.style.display = "none";
     dom.mainPanel.style.display = "block";
