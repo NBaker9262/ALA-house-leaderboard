@@ -638,6 +638,8 @@ function normalizeId(value) {
     .slice(0, 40);
 }
 
+const safeId = normalizeId;
+
 function chunkArray(items, size) {
   const out = [];
   for (let i = 0; i < items.length; i += size) {
