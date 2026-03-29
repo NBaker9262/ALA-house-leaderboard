@@ -2,155 +2,456 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#406ac8" />
+<meta name="description" content="House points management system for school events and competitions" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="House Points" />
 <title>House Points Control</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="control.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect fill='%23406ac8' width='128' height='128'/><text x='64' y='95' font-size='60' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>HP</text></svg>" />
 </head>
+
 <body>
-<div class="login-shell" id="loginShell">
+<div class="login-shell" id="loginBox">
   <form class="login-card" id="loginForm" novalidate>
-    <div class="brand">ALA House Points</div>
     <h1>Admin Sign In</h1>
-    <p class="muted">Event -> Game -> Point Changes</p>
+    <p class="login-subtitle">House points management</p>
 
     <label class="field" for="email">
       <span>Email</span>
-      <input id="email" type="email" autocomplete="username" required placeholder="you@alaschools.org" />
+      <input id="email" type="email" autocomplete="username" placeholder="admin@school.org" required>
     </label>
 
     <label class="field" for="password">
       <span>Password</span>
-      <input id="password" type="password" autocomplete="current-password" required placeholder="Password" />
+      <input id="password" type="password" autocomplete="current-password" placeholder="Password" required>
     </label>
 
+    <div class="login-meta-row">
+      <button id="loginResetBtn" class="btn btn-ghost btn-mini" type="button">Forgot Password?</button>
+      <span class="muted">Uses Firebase reset email</span>
+    </div>
+
+    <p id="loginResetStatus" class="log-empty" hidden></p>
     <p id="authError" class="auth-error" hidden></p>
-    <button id="signInBtn" class="btn btn-primary" type="submit">Sign In</button>
+
+    <button id="emailPassBtn" class="btn btn-primary" type="submit">Sign In</button>
   </form>
 </div>
 
-<main id="app" class="wrap" hidden>
+<div class="wrap" id="mainPanel">
   <header class="topbar">
     <div>
       <h2>House Points Control</h2>
-      <p class="muted">Live workflow: start event, save games, apply points.</p>
+      <p id="syncStatus" class="sync-status" data-tone="neutral">Connecting to live scores...</p>
     </div>
+
     <div class="topbar-actions">
-      <div class="whoami">
-        <strong id="whoEmail">-</strong>
-        <span id="whoRole">Staff</span>
-      </div>
-      <a class="btn btn-outline" href="/leaderboard/index.html">Leaderboard</a>
-      <button id="signOutBtn" class="btn btn-ghost" type="button">Sign Out</button>
+      <button id="adminMenuBtn" class="icon-btn" type="button" aria-label="Open admin management" title="Admin Management" data-action-control>
+        <span class="icon-bars" aria-hidden="true"></span>
+      </button>
+      <button id="profileMenuBtn" class="icon-btn icon-profile" type="button" aria-label="Open profile" title="Profile" data-action-control>
+        <span id="profileInitials" aria-hidden="true">--</span>
+      </button>
     </div>
   </header>
 
-  <section class="stats">
-    <article class="stat-card">
-      <span>Red Panda</span>
-      <strong id="scoreRed">0</strong>
-    </article>
-    <article class="stat-card">
-      <span>Polar</span>
-      <strong id="scoreWhite">0</strong>
-    </article>
-    <article class="stat-card">
-      <span>Grizzly</span>
-      <strong id="scoreBlue">0</strong>
-    </article>
-    <article class="stat-card">
-      <span>Kodiak</span>
-      <strong id="scoreSilver">0</strong>
-    </article>
+  <section class="workspace-nav" id="workspaceNav">
+    <button class="btn btn-ghost workspace-tab is-active" type="button" data-workspace-tab="scoring" data-action-control>Scoring</button>
+    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="history" data-action-control>History</button>
+    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="queue" data-action-control>Approvals</button>
+    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="activity" data-action-control>Recent</button>
+    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="analytics" data-action-control>Analytics</button>
   </section>
 
-  <section class="permission-panel">
-    <h3>Account Permissions</h3>
-    <div id="permissionGrid" class="permission-grid"></div>
+  <section class="reason-lock" id="reasonLockPanel" data-workspace-panel="scoring">
+    <div class="reason-lock-head">
+      <strong>Quick Scoring</strong>
+      <span id="contextStatus" class="status-chip">Ready</span>
+    </div>
+
+    <div class="quick-scoring-form">
+      <div class="form-step">
+        <label class="form-label">Step 1: Select Reason</label>
+        <div class="reason-builder-row">
+          <select id="reasonTemplateSelect" data-action-control>
+            <option value="">Quick reason template</option>
+          </select>
+          <input id="customReasonInput" type="text" maxlength="80" placeholder="Or type custom reason..." data-action-control>
+        </div>
+        <div id="recentReasons" class="reason-pill-row"></div>
+      </div>
+
+      <div class="form-step">
+        <label class="form-label">Step 2: Optional Details</label>
+        <input id="notesInput" type="text" maxlength="160" placeholder="Notes (who, what, detail)" data-action-control>
+      </div>
+
+      <div class="form-step form-step-expand" id="tagSelectorExpand">
+        <label class="form-label expand-toggle">
+          <input type="checkbox" id="tagSelectorToggle" />
+          <span>Step 3: Tag Event (Optional)</span>
+          <span class="expand-icon">▶</span>
+        </label>
+
+        <div class="tag-selector-section" hidden id="tagSelectorPanel">
+          <div class="tag-selector-input-group">
+            <input
+              id="tagSearchInput"
+              type="text"
+              maxlength="40"
+              placeholder="Search or add tag (e.g., Basketball, Assembly)..."
+              data-action-control
+            />
+          </div>
+          <div id="tagSuggestions" class="tag-suggestions"></div>
+          <div id="selectedTags" class="tag-chips"></div>
+        </div>
+      </div>
+
+      <div class="reason-lock-actions">
+        <p id="contextSummary" class="muted">Scoring is ready. Select a reason above.</p>
+      </div>
+    </div>
+
+    <div id="reasonTracker" class="reason-tracker"></div>
+
+    <div class="reason-lock-controls">
+      <button id="reasonCommitBtn" class="btn btn-primary" type="button" data-action-control>Start Context</button>
+      <button id="reasonClearBtn" class="btn btn-ghost" type="button" data-action-control>Lock</button>
+    </div>
   </section>
 
-  <div class="layout">
-    <section class="panel">
-      <h3>1) Start Event</h3>
-      <div class="field-row">
-        <input id="eventName" type="text" maxlength="80" placeholder="Event name (example: Spring Sports Assembly)" />
-        <button id="startEventBtn" class="btn btn-primary" type="button">Start Event</button>
-      </div>
-      <div id="activeEventCard" class="active-event">
-        <p>No active event.</p>
-      </div>
-      <div class="field-row">
-        <button id="closeEventBtn" class="btn btn-outline" type="button">Close Active Event</button>
-        <button id="deleteLastGameBtn" class="btn btn-danger" type="button">Delete Last Game</button>
-      </div>
-    </section>
+  <section class="houses" id="housesContainer" data-workspace-panel="scoring"></section>
 
-    <section class="panel">
-      <h3>2) Add Game + Point Changes</h3>
-      <p class="muted">You cannot add points until an event is active.</p>
-      <label class="field" for="gameName">
-        <span>Game Name</span>
-        <input id="gameName" type="text" maxlength="80" placeholder="Game name (example: Relay Race 1)" />
-      </label>
+  <section class="place-awards advanced-section" id="placePanel" data-workspace-panel="scoring">
+    <details class="accordion-section">
+      <summary class="accordion-header">
+        <span>Award Place Points</span>
+        <span class="accordion-icon">▼</span>
+      </summary>
+      <div class="accordion-content">
+        <div class="place-awards-header">
+          <h3>Award Place Points</h3>
+          <span class="place-hint" id="placeHint"></span>
+        </div>
 
-      <div class="houses-grid">
-        <label class="house-input" for="deltaRed">
-          <span>Red Panda</span>
-          <input id="deltaRed" type="number" value="0" step="1" />
-        </label>
-        <label class="house-input" for="deltaWhite">
-          <span>Polar</span>
-          <input id="deltaWhite" type="number" value="0" step="1" />
-        </label>
-        <label class="house-input" for="deltaBlue">
-          <span>Grizzly</span>
-          <input id="deltaBlue" type="number" value="0" step="1" />
-        </label>
-        <label class="house-input" for="deltaSilver">
-          <span>Kodiak</span>
-          <input id="deltaSilver" type="number" value="0" step="1" />
-        </label>
+        <div class="place-rows" id="placeRows"></div>
+        <div id="placePreview" class="place-preview"></div>
+
+        <div class="place-actions">
+          <button id="autoFillBtn" class="btn btn-muted" type="button" data-action-control>Auto Fill by Score</button>
+          <button id="clearPlacesBtn" class="btn btn-ghost" type="button" data-action-control>Clear</button>
+          <button id="applyPlacesBtn" class="btn btn-primary" type="button" data-action-control>Apply Place Awards</button>
+        </div>
       </div>
+    </details>
+  </section>
 
-      <div class="quick-row">
-        <button class="chip" type="button" data-quick="50">+50</button>
-        <button class="chip" type="button" data-quick="30">+30</button>
-        <button class="chip" type="button" data-quick="15">+15</button>
-        <button class="chip" type="button" data-quick="10">+10</button>
-        <select id="quickHouse">
+  <section class="meta advanced-section" data-workspace-panel="scoring">
+    <details class="accordion-section">
+      <summary class="accordion-header">
+        <span>Quick Actions & Settings</span>
+        <span class="accordion-icon">▼</span>
+      </summary>
+      <div class="accordion-content" style="display:flex;gap:10px;align-items:center">
+        <button id="undoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Undo Last Action" aria-label="Undo Last Action">
+          <span aria-hidden="true">↶</span>
+        </button>
+        <button id="redoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Redo" aria-label="Redo" disabled>
+          <span aria-hidden="true">↷</span>
+        </button>
+        <button id="resetBtn" class="btn btn-danger quick-icon-btn" type="button" data-action-control title="Reset All Scores" aria-label="Reset All Scores">
+          <span aria-hidden="true">⟳</span>
+        </button>
+      </div>
+    </details>
+  </section>
+
+  <section class="activity-log advanced-section" data-workspace-panel="history">
+    <details class="accordion-section">
+      <summary class="accordion-header">
+        <span>Activity Explorer</span>
+        <span class="accordion-icon">▼</span>
+      </summary>
+      <div class="accordion-content">
+        <h4>Activity Explorer</h4>
+        <div id="historyStats" class="history-stats"></div>
+
+        <div class="history-tools">
+          <input id="historySearch" type="text" placeholder="Search name, author, or action" data-action-control>
+          <div class="history-filters">
+            <select id="historyPreset" data-action-control>
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 days</option>
+              <option value="month">This month</option>
+            </select>
+            <input id="historyStart" type="datetime-local" data-action-control>
+            <input id="historyEnd" type="datetime-local" data-action-control>
+            <select id="historySort" data-action-control>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="largest">Biggest change</option>
+            </select>
+            <select id="historyType" data-action-control>
+              <option value="all">All actions</option>
+              <option value="applied">Applied</option>
+              <option value="proposal">Pending Proposals</option>
+              <option value="proposal_approved">Approved Suggestions</option>
+              <option value="proposal_rejected">Rejected Suggestions</option>
+              <option value="delta">Score edits</option>
+              <option value="place_awards">Place awards</option>
+              <option value="reset">Resets</option>
+            </select>
+            <select id="historyLimit" data-action-control>
+              <option value="12">Show 12</option>
+              <option value="25">Show 25</option>
+              <option value="50">Show 50</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkpoint-row" id="checkpointRow">
+          <input id="checkpointName" type="text" maxlength="60" placeholder="Savepoint label (example: Friday assembly before finals)" data-action-control>
+          <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Savepoint</button>
+        </div>
+
+        <div class="history-actions">
+          <input id="commitLabel" type="text" maxlength="40" placeholder="Optional commit label (applies to new commits)" data-action-control>
+          <input id="jumpTime" type="datetime-local" data-action-control>
+          <button id="jumpBtn" class="btn btn-ghost" type="button" data-action-control>Open Closest Entry</button>
+          <button id="backupBtn" class="btn btn-ghost" type="button" data-action-control>Download JSON Backup</button>
+        </div>
+
+        <ul id="historyList"><li class="log-empty">No history yet</li></ul>
+      </div>
+    </details>
+  </section>
+
+  <section class="activity-log advanced-section" id="proposalPanel" data-workspace-panel="queue">
+    <h4>Approval Queue</h4>
+    <p class="muted">Helpers can suggest points here. Admins approve or reject.</p>
+
+    <div class="approval-controls">
+      <div class="approval-filters">
+        <select id="approvalStatusFilter" data-action-control>
+          <option value="">All statuses</option>
+          <option value="pending">Pending only</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select id="approvalHouseFilter" data-action-control>
+          <option value="">All houses</option>
           <option value="red">Red Panda</option>
           <option value="white">Polar</option>
           <option value="blue">Grizzly</option>
           <option value="silver">Kodiak</option>
         </select>
       </div>
-
-      <div class="field-row">
-        <button id="saveGameBtn" class="btn btn-primary" type="button">3) Save Game</button>
-        <button id="clearGameBtn" class="btn btn-ghost" type="button">Clear Inputs</button>
+      <div class="approval-bulk-actions">
+        <button id="bulkApproveBtn" class="btn btn-primary btn-mini" type="button" data-action-control>Approve Selected</button>
+        <button id="bulkRejectBtn" class="btn btn-danger btn-mini" type="button" data-action-control>Reject Selected</button>
       </div>
-    </section>
-  </div>
+    </div>
 
-  <div class="layout two">
-    <section class="panel">
-      <h3>Event List</h3>
-      <ul id="eventsList" class="stack-list"></ul>
-    </section>
+    <ul id="proposalList"><li class="log-empty">No pending suggestions</li></ul>
+  </section>
 
-    <section class="panel">
-      <h3>Event History</h3>
-      <div class="field-row">
-        <button id="refreshBtn" class="btn btn-outline" type="button">Refresh</button>
-        <button id="clearEventsBtn" class="btn btn-danger" type="button">Clear Event Data</button>
+  <section class="activity-log" data-workspace-panel="analytics">
+    <h4>Analytics Dashboard</h4>
+    <p class="muted">House performance and activity metrics</p>
+
+    <div class="analytics-controls">
+      <div class="analytics-date-range">
+        <label for="analyticsStartDate">From:</label>
+        <input id="analyticsStartDate" type="date" data-action-control>
+        <label for="analyticsEndDate">To:</label>
+        <input id="analyticsEndDate" type="date" data-action-control>
+        <button id="analyticsFilterBtn" class="btn btn-primary btn-mini" type="button" data-action-control>Apply Filter</button>
       </div>
-      <ul id="historyList" class="stack-list"></ul>
+      <div class="analytics-export">
+        <button id="analyticsExportCsvBtn" class="btn btn-ghost btn-mini" type="button" data-action-control>Export CSV</button>
+        <button id="analyticsExportPdfBtn" class="btn btn-ghost btn-mini" type="button" data-action-control>Export PDF</button>
+      </div>
+    </div>
+
+    <div class="analytics-grid">
+      <div class="analytics-card">
+        <h5>Points by House</h5>
+        <canvas id="chartPointsByHouse" height="200"></canvas>
+      </div>
+      <div class="analytics-card">
+        <h5>Top Scorers</h5>
+        <canvas id="chartTopScorers" height="200"></canvas>
+      </div>
+      <div class="analytics-card">
+        <h5>Points by Category</h5>
+        <canvas id="chartPointsByTag" height="200"></canvas>
+      </div>
+      <div class="analytics-card">
+        <h5>Historical Trend</h5>
+        <canvas id="chartHistoricalTrend" height="200"></canvas>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="accountDialog" class="drawer" hidden>
+  <div class="drawer-scrim" data-close-drawer="account"></div>
+  <aside class="drawer-panel drawer-panel-right account-section" aria-label="Account drawer">
+    <div class="drawer-head">
+      <h3>Account & Access</h3>
+      <button id="closeAccountBtn" class="btn btn-ghost btn-mini" type="button">Close</button>
+    </div>
+
+    <div class="account-grid">
+      <article class="account-card">
+        <h3>Signed In</h3>
+        <p class="account-item"><strong id="loggedInAs">-</strong></p>
+      </article>
+
+      <article class="account-card">
+        <h3>Permissions</h3>
+        <div id="permissionGrid" class="permissions-grid"></div>
+      </article>
+
+      <article class="account-card">
+        <h3>Password Reset</h3>
+        <p class="muted">Send reset links to staff accounts.</p>
+        <div class="security-actions">
+          <input id="resetEmail" type="email" placeholder="user@alaschools.org" data-action-control>
+          <button id="resetPasswordBtn" class="btn btn-primary" type="button" data-action-control>Send Reset Link</button>
+        </div>
+        <p id="passwordResetStatus" class="log-empty">Password reset links are available after sign in.</p>
+      </article>
+
+      <article class="account-card" id="studentLookupPanel">
+        <h3>Student Lookup</h3>
+        <p class="muted">Find a student and house quickly by name or student ID.</p>
+        <div class="history-tools">
+          <input id="studentLookupInput" type="text" maxlength="80" placeholder="Type at least 2 characters (name or ID)" data-action-control>
+        </div>
+        <p id="studentLookupStatus" class="log-empty">Type to search the secure student directory.</p>
+        <ul id="studentLookupResults"><li class="log-empty">No results yet.</li></ul>
+      </article>
+
+      <article class="account-card">
+        <h3>Session</h3>
+        <button id="signOutBtn" class="btn btn-outline" type="button">Sign Out</button>
+      </article>
+    </div>
+  </aside>
+</div>
+
+<div id="adminDialog" class="drawer" hidden>
+  <aside class="drawer-panel drawer-panel-left" aria-label="Admin drawer">
+    <div class="drawer-head">
+      <h3>Admin Access Management</h3>
+      <button id="closeAdminBtn" class="btn btn-ghost btn-mini" type="button">Close</button>
+    </div>
+
+    <section class="admin-section" id="userAdminPanel" hidden>
+      <h4 class="admin-section-title">Account Management</h4>
+      <p class="admin-note">Create users and assign role levels for control access.</p>
+
+      <div class="user-manager-grid">
+        <input id="userName" type="text" maxlength="80" placeholder="Display name" data-action-control>
+        <input id="userEmail" type="email" placeholder="user@alaschools.org" data-action-control>
+        <input id="userPassword" type="text" minlength="6" placeholder="At least 6 characters" data-action-control>
+        <select id="userRole" data-action-control>
+          <option value="helper">Helper</option>
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+          <option value="superadmin">Superadmin</option>
+        </select>
+      </div>
+
+      <div class="user-admin-actions">
+        <button id="createUserBtn" class="btn btn-primary" type="button" data-action-control>Create / Update User</button>
+        <button id="refreshUsersBtn" class="btn btn-ghost" type="button" data-action-control>Refresh Users</button>
+      </div>
+
+      <p id="userAdminStatus" class="log-empty">Only visible to superadmin accounts.</p>
+
+      <div class="history-tools">
+        <input id="userSearch" type="text" placeholder="Search users by name/email" data-action-control>
+      </div>
+      <ul id="userList"><li class="log-empty">No users loaded yet.</li></ul>
     </section>
+
+    <hr class="admin-divider">
+
+    <section class="admin-section" id="catalogManagerPanel">
+      <h4 class="admin-section-title">Event Catalog Manager</h4>
+      <p class="admin-note">Manage approved event paths used by all scorers.</p>
+      <div class="user-manager-grid">
+        <input id="catalogCategoryInput" type="text" maxlength="40" placeholder="Category (example: Sports)" data-action-control>
+        <input id="catalogEventInput" type="text" maxlength="50" placeholder="Event (example: Basketball)" data-action-control>
+        <input id="catalogSubeventInput" type="text" maxlength="60" placeholder="Subevent (example: Girls Varsity)" data-action-control>
+      </div>
+      <div class="user-admin-actions">
+        <button id="catalogAddPathBtn" class="btn btn-primary" type="button" data-action-control>Add / Update Path</button>
+      </div>
+      <ul id="catalogList"><li class="log-empty">No catalog entries loaded yet.</li></ul>
+    </section>
+
+    <hr class="admin-divider">
+
+    <section class="admin-section" id="sheetSyncPanel">
+      <h4 class="admin-section-title">Google Sheet Sync</h4>
+      <p class="admin-note">Requests a points sync run and shows last sync status.</p>
+      <div class="user-admin-actions">
+        <button id="syncPointsBtn" class="btn btn-primary" type="button" data-action-control>Sync Points Now</button>
+      </div>
+      <p id="syncPointsStatus" class="log-empty">No sync request yet.</p>
+    </section>
+
+    <hr class="admin-divider">
+
+    <section class="admin-section superadmin-only" id="backupManagerPanel" hidden>
+      <h4 class="admin-section-title">System Backups</h4>
+      <p class="admin-note">Create full backups and restore data (excluding immutable history).</p>
+      <div class="user-manager-grid">
+        <input id="backupLabelInput" type="text" maxlength="80" placeholder="Backup label (example: March assembly state)" data-action-control>
+      </div>
+      <div class="user-admin-actions">
+        <button id="createBackupBtn" class="btn btn-primary" type="button" data-action-control>Create Backup</button>
+        <button id="refreshBackupsBtn" class="btn btn-ghost" type="button" data-action-control>Refresh Backups</button>
+      </div>
+      <p id="backupStatus" class="log-empty">Backups are only visible to superadmins.</p>
+      <ul id="backupList"><li class="log-empty">No backups loaded yet.</li></ul>
+    </section>
+  </aside>
+  <div class="drawer-scrim" data-close-drawer="admin"></div>
+</div>
+
+<div id="helpDialog" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpDialogTitle" hidden>
+  <div class="help-modal-card" tabindex="-1">
+    <div class="help-modal-header">
+      <h3 id="helpDialogTitle">Control Help</h3>
+      <button id="closeHelpBtn" class="btn btn-outline btn-mini" type="button">Close</button>
+    </div>
+
+    <p class="help-note">Use these controls to manage points safely during live events.</p>
+    <ul class="help-list">
+      <li>Unlock scoring with a reason before editing points.</li>
+      <li>Use place awards for fast 1st-4th scoring.</li>
+      <li>Create checkpoints before major changes.</li>
+      <li>Use Jump to Closest to restore a time-based snapshot.</li>
+      <li>Download JSON backups before large edits.</li>
+    </ul>
   </div>
+</div>
 
-  <p id="status" class="status">Connecting...</p>
-</main>
+  <section class="activity-log" data-workspace-panel="activity">
+    <h4>Recent Activity</h4>
+    <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
+  </section>
 
-<script type="module" src="control.js"></script>
-</body>
-</html>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>

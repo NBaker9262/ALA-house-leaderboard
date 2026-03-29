@@ -5,26 +5,155 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Public leaderboard read, authenticated score/event writes.
+    function claimRole() {
+      return signedIn() && request.auth.token.role is string ? request.auth.token.role : "";
+    }
+
+    function profileRole() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role is string
+          ? get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role
+          : "";
+    }
+
+    function roleValue() {
+      return claimRole() != "" ? claimRole() : profileRole();
+    }
+
+    function isSuperadmin() {
+      return signedIn() &&
+        (request.auth.token.superadmin == true ||
+         claimRole() == "superadmin" ||
+         profileRole() == "superadmin");
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        (request.auth.token.admin == true ||
+         claimRole() == "admin" ||
+         profileRole() == "admin");
+    }
+
+    function isStaff() {
+      return roleValue() == "staff";
+    }
+
+    function isHelper() {
+      return roleValue() == "helper";
+    }
+
+    function hasControlAccess() {
+      return signedIn() && (
+        isSuperadmin() ||
+        isAdmin() ||
+        isStaff() ||
+        isHelper()
+      );
+    }
+
+    function canDirectScore() {
+      return signedIn() && (
+        isSuperadmin() ||
+        isAdmin() ||
+        isStaff()
+      );
+    }
+
+    function canApproveProposals() {
+      return signedIn() && (isSuperadmin() || isAdmin());
+    }
+
+    function canProposePoints() {
+      return signedIn() && (
+        isSuperadmin() ||
+        isAdmin() ||
+        isHelper()
+      );
+    }
+
     match /leaderboard/scores {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if canDirectScore();
 
-      // Immutable append-only audit log.
       match /auditLog/{entryId} {
-        allow read: if signedIn();
-        allow create: if signedIn();
+        allow read: if hasControlAccess();
+        allow create: if hasControlAccess() &&
+          request.resource.data.actorUid == request.auth.uid &&
+          request.resource.data.createdAtMs is number;
+        allow update, delete: if false;
+      }
+
+      match /pendingProposals/{proposalId} {
+        allow read: if canApproveProposals() ||
+          (signedIn() && resource.data.createdByUid == request.auth.uid);
+
+        allow create: if canProposePoints() &&
+          request.resource.data.createdByUid == request.auth.uid &&
+          request.resource.data.status == "pending" &&
+          request.resource.data.createdAtMs is number;
+
+        allow update: if canApproveProposals() &&
+          resource.data.status == "pending" &&
+          request.resource.data.createdByUid == resource.data.createdByUid &&
+          request.resource.data.status in ["approved", "rejected", "pending"];
+
+        allow delete: if false;
+      }
+
+      match /syncRequests/{requestId} {
+        allow read: if canApproveProposals();
+        allow create: if canApproveProposals() &&
+          request.resource.data.requestedByUid == request.auth.uid &&
+          request.resource.data.status == "queued" &&
+          request.resource.data.requestedAtMs is number;
         allow update, delete: if false;
       }
     }
 
-    // Role metadata read used by control panel.
     match /userProfiles/{uid} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (request.auth.uid == uid || isSuperadmin() || isAdmin());
+      allow create, update: if isSuperadmin();
+      allow delete: if false;
+    }
+
+    match /studentDirectory/{studentId} {
+      allow read: if hasControlAccess();
       allow write: if false;
     }
 
-    // Default deny for everything else.
+    match /eventTags/{tagId} {
+      allow read: if hasControlAccess();
+      allow create, update: if isSuperadmin() ||
+        (isAdmin() && request.resource.data.createdBy == request.auth.uid);
+      allow delete: if isSuperadmin();
+    }
+
+    match /tagProposals/{proposalId} {
+      allow read: if canApproveProposals() ||
+        (signedIn() && resource.data.createdBy == request.auth.uid);
+
+      allow create: if canProposePoints() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.createdAt is number;
+
+      allow update: if canApproveProposals() &&
+        resource.data.status == "pending" &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.status in ["approved", "rejected", "pending"];
+
+      allow delete: if false;
+    }
+
+    match /systemBackups/{backupId} {
+      allow read, write: if isSuperadmin();
+
+      match /{subPath=**} {
+        allow read, write: if isSuperadmin();
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
