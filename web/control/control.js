@@ -2838,9 +2838,19 @@ function roleFromClaims(claims = {}) {
   return "";
 }
 
-async function roleFromProfile(uid) {
+async function roleFromProfile(uid, email) {
   if (TEST_MODE || !uid) return "";
   try {
+    // First try email-based lookup (most reliable)
+    if (email) {
+      const profilesRef = collection(db, "userProfiles");
+      const findQuery = query(profilesRef, where("email", "==", email), limit(1));
+      const snapshot = await getDocs(findQuery);
+      if (!snapshot.empty) {
+        return normalizeRole(snapshot.docs[0].data()?.role || "");
+      }
+    }
+    // Fallback to UID-based lookup
     const profileRef = doc(db, "userProfiles", uid);
     const snapshot = await getDoc(profileRef);
     if (!snapshot.exists()) return "";
@@ -2853,7 +2863,7 @@ async function roleFromProfile(uid) {
 async function resolveAccessRole(user, claims = {}) {
   const claimRole = roleFromClaims(claims);
   if (claimRole) return claimRole;
-  const profileRole = await roleFromProfile(user.uid);
+  const profileRole = await roleFromProfile(user.uid, user.email);
   if (profileRole) return profileRole;
   return "";
 }
