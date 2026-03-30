@@ -734,23 +734,24 @@ function createActionTimestamp() {
 
 function mapAuthError(error) {
   const code = error?.code || "";
-  if (code === "auth/invalid-credential") return "Incorrect email or password.";
-  if (code === "auth/user-disabled") return "This account is disabled.";
-  if (code === "auth/too-many-requests") return "Too many attempts. Wait and try again.";
+  if (code === "auth/invalid-credential") return "Incorrect email or password. Contact Noah Baker (admin) if you need help resetting your password.";
+  if (code === "auth/user-disabled") return "This account is disabled. Contact Noah Baker (admin).";
+  if (code === "auth/too-many-requests") return "Too many attempts. Wait a few minutes and try again.";
   if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
-  return "Sign in failed. Please try again.";
+  if (code === "auth/user-not-found") return "Account not found. Contact Noah Baker (admin) to verify your account exists.";
+  return "Sign in failed. If the issue persists, contact Noah Baker (admin) at nb72258@stu.alaschools.org.";
 }
 
 function mapPasswordResetError(error) {
   const code = String(error?.code || "");
   if (code === "auth/invalid-email") return "Enter a valid email address.";
-  if (code === "auth/user-not-found") return "No account was found with that email.";
+  if (code === "auth/user-not-found") return "No account was found with that email. Contact Noah Baker (admin) to verify your account exists.";
   if (code === "auth/missing-email") return "Email is required.";
   if (code === "auth/too-many-requests") return "Too many reset attempts. Wait a few minutes and retry.";
-  if (code === "auth/network-request-failed") return "Network error while sending reset email.";
-  if (code === "auth/unauthorized-continue-uri") return "Reset link domain is not authorized in Firebase Auth settings.";
-  if (code === "auth/invalid-continue-uri") return "Reset continue URL is invalid.";
-  return "Unable to send reset link. Check the email and try again.";
+  if (code === "auth/network-request-failed") return "Network error. Please try again or contact Noah Baker (admin).";
+  if (code === "auth/unauthorized-continue-uri") return "Email domain not configured. Contact Noah Baker (admin).";
+  if (code === "auth/invalid-continue-uri") return "Reset link configuration error. Contact Noah Baker (admin).";
+  return "Unable to send reset link. Check your email (including spam/junk folders) or contact Noah Baker (admin) at nb72258@stu.alaschools.org.";
 }
 
 function isLikelyEmail(value) {
@@ -1966,7 +1967,19 @@ function renderProposalList() {
 function renderUserList() {
   if (!dom.userList) return;
   const queryText = String(dom.userSearch.value || "").trim().toLowerCase();
-  const filtered = userProfiles.filter(profile => {
+
+  // Deduplicate by email (unique identifier)
+  const seen = new Set();
+  const deduped = [];
+  userProfiles.forEach(profile => {
+    const key = profile.email || profile.uid;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(profile);
+    }
+  });
+
+  const filtered = deduped.filter(profile => {
     if (!queryText) return true;
     const haystack = `${profile.name || ""} ${profile.email || ""} ${profile.role || ""}`.toLowerCase();
     return haystack.includes(queryText);
@@ -3123,7 +3136,18 @@ function roleFromClaims(claims = {}) {
 async function roleFromProfile(uid, email) {
   if (TEST_MODE || !uid) return "";
   try {
-    // First try email-based lookup (most reliable)
+    // First try UID-based lookup (faster, no index needed)
+    console.log("🔎 Looking up profile by UID:", uid);
+    const profileRef = doc(db, "userProfiles", uid);
+    const snapshot = await getDoc(profileRef);
+    if (snapshot.exists()) {
+      const role = normalizeRole(snapshot.data()?.role || "");
+      console.log("✅ Found profile by UID with role:", role);
+      return role;
+    }
+    console.log("❌ No profile found by UID, trying email lookup");
+
+    // Fallback to email-based lookup (requires index)
     if (email) {
       console.log("🔎 Looking up profile by email:", email);
       const profilesRef = collection(db, "userProfiles");
@@ -3136,17 +3160,7 @@ async function roleFromProfile(uid, email) {
       }
       console.log("❌ No profile found by email");
     }
-    // Fallback to UID-based lookup
-    console.log("🔎 Falling back to UID lookup:", uid);
-    const profileRef = doc(db, "userProfiles", uid);
-    const snapshot = await getDoc(profileRef);
-    if (!snapshot.exists()) {
-      console.log("❌ No profile found by UID");
-      return "";
-    }
-    const role = normalizeRole(snapshot.data()?.role || "");
-    console.log("✅ Found profile by UID with role:", role);
-    return role;
+    return "";
   } catch (error) {
     console.error("❌ Error fetching profile:", error);
     return "";
@@ -3903,7 +3917,7 @@ function setupEventListeners() {
     void addCatalogPath(categoryName, eventName, subeventName);
   });
 
-  dom.recentReasons.addEventListener("click", event => {
+  dom.recentReasons?.addEventListener("click", event => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const button = target.closest("button[data-reason-chip]");
@@ -4119,28 +4133,35 @@ function bootAuth() {
     }
 
     console.log("👤 User authenticated:", user.email);
-    const token = await user.getIdTokenResult();
-    const role = await resolveAccessRole(user, token.claims || {});
-    console.log("🔍 Resolved role:", role);
-    if (!role) {
-      console.error("❌ No role found for user");
+    try {
+      const token = await user.getIdTokenResult();
+      console.log("✅ Got ID token");
+      const role = await resolveAccessRole(user, token.claims || {});
+      console.log("🔍 Resolved role:", role);
+      if (!role) {
+        console.error("❌ No role found for user");
+        await signOut(auth);
+        setAuthError("This account does not have control-panel access. Contact Noah Baker (admin).");
+        return;
+      }
+
+      console.log("✅ Authentication successful, showing dashboard");
+      setAuthError("");
+      dom.loginBox.style.display = "none";
+      dom.mainPanel.style.display = "block";
+      applySessionIdentity({
+        email: user.email || "",
+        uid: user.uid,
+        role
+      });
+
+      await refreshUserList();
+      startLiveListeners();
+    } catch (error) {
+      console.error("❌ Error during authentication flow:", error);
+      setAuthError(`Authentication error: ${error?.message || "Unknown error"}`);
       await signOut(auth);
-      setAuthError("This account does not have control-panel access.");
-      return;
     }
-
-    console.log("✅ Authentication successful, showing dashboard");
-    setAuthError("");
-    dom.loginBox.style.display = "none";
-    dom.mainPanel.style.display = "block";
-    applySessionIdentity({
-      email: user.email || "",
-      uid: user.uid,
-      role
-    });
-
-    await refreshUserList();
-    startLiveListeners();
   });
 }
 
