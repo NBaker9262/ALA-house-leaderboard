@@ -100,112 +100,72 @@
     <div class="quick-scoring-form">
       <div class="form-step">
         <label class="form-label">Step 1: Select Reason</label>
-        <div class="reason-builder-row">
-          <select id="reasonTemplateSelect" data-action-control>
-            <option value="">Quick reason template</option>
-          </select>
-          <input id="customReasonInput" type="text" maxlength="80" placeholder="Or type custom reason..." data-action-control>
-        </div>
-        <div id="recentReasons" class="reason-pill-row"></div>
-      </div>
-
-      <div class="form-step" hidden>
-        <label class="form-label">Direct Reason Input</label>
-        <input id="reasonInput" type="text" maxlength="100" placeholder="Direct reason entry..." data-action-control>
-      </div>
-
-      <div class="form-step" hidden>
-        <label class="form-label">Reason Details</label>
-        <input id="reasonDetailInput" type="text" maxlength="200" placeholder="Additional details..." data-action-control>
-      </div>
-
-      <div class="form-step" hidden>
-        <label class="form-label">Used Reasons</label>
-        <select id="usedReasonSelect" data-action-control>
-          <option value="">Select from history</option>
-        </select>
-        <button id="applyUsedReasonBtn" class="btn btn-muted btn-mini" type="button" data-action-control>Apply</button>
-      </div>
-
-      <div class="form-step" hidden>
-        <label class="form-label">Reason Template</label>
-        <button id="useReasonTemplateBtn" class="btn btn-muted btn-mini" type="button" data-action-control>Use Template</button>
+        <input id="reasonComboInput" type="text" maxlength="80" placeholder="Type or select reason..." data-action-control list="reasonSuggestions" autocomplete="off">
+        <datalist id="reasonSuggestions"></datalist>
+        <div id="recentReasonsDisplay" class="reason-pill-row"></div>
       </div>
 
       <div class="form-step">
-        <label class="form-label">Step 2: Optional Details</label>
-        <input id="notesInput" type="text" maxlength="160" placeholder="Notes (who, what, detail)" data-action-control>
-      </div>
-
-      <div class="form-step">
-        <label class="form-label">Step 3: Event Category</label>
-        <select id="categorySelect" data-action-control>
-          <option value="">Select category...</option>
-        </select>
-      </div>
-
-      <div class="form-step">
-        <label class="form-label">Event Type</label>
-        <select id="eventSelect" data-action-control>
+        <label class="form-label">Step 2: Event Classification</label>
+        <select id="classificationSelect" data-action-control>
           <option value="">Select event...</option>
         </select>
       </div>
 
       <div class="form-step">
-        <label class="form-label">Event SubType</label>
-        <select id="subeventSelect" data-action-control>
-          <option value="">Select subevent...</option>
-        </select>
+        <label class="form-label">Step 3: Quick Amount</label>
+        <div class="quick-amount-buttons">
+          <button class="btn btn-mini btn-amount" type="button" data-amount="50" data-action-control>+50</button>
+          <button class="btn btn-mini btn-amount" type="button" data-amount="30" data-action-control>+30</button>
+          <button class="btn btn-mini btn-amount" type="button" data-amount="15" data-action-control>+15</button>
+          <button class="btn btn-mini btn-amount" type="button" data-amount="10" data-action-control>+10</button>
+        </div>
+        <div class="custom-amount-field">
+          <label for="customAmountInput">Or enter custom:</label>
+          <input id="customAmountInput" type="number" min="1" placeholder="Custom amount" data-action-control>
+        </div>
       </div>
 
       <div class="form-step">
-        <label class="form-label">Event Mode</label>
-        <select id="eventModeSelect" data-action-control>
-          <option value="event">Event (One-time)</option>
-          <option value="session">Session (Recurring)</option>
-        </select>
-      </div>
-
-      <div class="form-step">
-        <label class="form-label">Season/Year</label>
-        <input id="seasonInput" type="text" maxlength="40" placeholder="2025-2026" data-action-control>
-      </div>
-
-      <div class="form-step" hidden>
-        <label class="form-label">Session</label>
-        <input id="sessionInput" type="text" maxlength="40" placeholder="Session name..." data-action-control>
-      </div>
-
-      <div class="form-step" hidden>
-        <button id="requestPathBtn" class="btn btn-muted" type="button" data-action-control>Propose New Tag</button>
+        <label class="form-label">Step 4: Select House</label>
+        <p class="muted">Click a house card below to apply</p>
       </div>
 
       <div class="form-step form-step-expand" id="tagSelectorExpand">
         <label class="form-label expand-toggle">
           <input type="checkbox" id="tagSelectorToggle" />
-          <span>Step 4: Tag Event (Optional)</span>
+          <span>Optional: Notes & Tags</span>
           <span class="expand-icon">▶</span>
         </label>
 
         <div class="tag-selector-section" hidden id="tagSelectorPanel">
-          <div class="tag-selector-input-group">
-            <input
-              id="tagSearchInput"
-              type="text"
-              maxlength="40"
-              placeholder="Search or add tag (e.g., Basketball, Assembly)..."
-              data-action-control
-            />
-          </div>
+          <input id="notesInput" type="text" maxlength="160" placeholder="Notes (who, what, detail)" data-action-control>
+          <input id="tagSearchInput" type="text" maxlength="40" placeholder="Add tag (e.g., Basketball)..." data-action-control>
           <div id="tagSuggestions" class="tag-suggestions"></div>
           <div id="selectedTags" class="tag-chips"></div>
         </div>
       </div>
 
       <div class="reason-lock-actions">
-        <p id="contextSummary" class="muted">Scoring is ready. Select a reason above.</p>
+        <p id="contextSummary" class="muted">Scoring ready. Select reason to begin.</p>
       </div>
     </div>
+
+    <!-- Hidden elements kept for backward compatibility -->
+    <input id="reasonInput" type="hidden">
+    <input id="reasonDetailInput" type="hidden">
+    <input id="sessionInput" type="hidden">
+    <button id="requestPathBtn" type="hidden"></button>
+    <select id="reasonTemplateSelect" hidden></select>
+    <select id="usedReasonSelect" hidden></select>
+    <select id="categorySelect" hidden></select>
+    <select id="eventSelect" hidden></select>
+    <select id="subeventSelect" hidden></select>
+    <select id="eventModeSelect" hidden></select>
+    <input id="seasonInput" type="hidden">
+    <input id="customReasonInput" type="hidden">
+    <button id="useReasonTemplateBtn" type="hidden"></button>
+    <button id="applyUsedReasonBtn" type="hidden"></button>
 
     <div id="reasonTracker" class="reason-tracker"></div>
 
@@ -487,6 +447,23 @@
         <button id="catalogAddPathBtn" class="btn btn-primary" type="button" data-action-control>Add / Update Path</button>
       </div>
       <ul id="catalogList"><li class="log-empty">No catalog entries loaded yet.</li></ul>
+    </section>
+
+    <hr class="admin-divider">
+
+    <section class="admin-section" id="importExportPanel">
+      <h4 class="admin-section-title">Data Import/Export</h4>
+      <p class="admin-note">Import points from CSV or export current scores.</p>
+      <div class="user-admin-actions">
+        <label for="pointsCsvImport" class="btn btn-primary" type="button" style="cursor: pointer; display: inline-block; padding: 10px 16px; border-radius: 11px; border: none;">
+          <span>Choose CSV File</span>
+          <input id="pointsCsvImport" type="file" accept=".csv" style="display: none;" data-action-control>
+        </label>
+        <button id="importPointsBtn" class="btn btn-primary" type="button" data-action-control hidden>Import Points</button>
+        <button id="exportPointsCsvBtn" class="btn btn-ghost" type="button" data-action-control>Export as CSV</button>
+      </div>
+      <p id="importPreviewStatus" class="log-empty">Load a CSV file to see preview.</p>
+      <ul id="importPreviewList" style="max-height: 200px; overflow-y: auto;"></ul>
     </section>
 
     <hr class="admin-divider">

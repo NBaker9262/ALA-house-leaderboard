@@ -360,6 +360,10 @@ renderCatalogList();
 renderReasonTemplateOptions();
 renderRecentReasonChips();
 renderReasonTracker();
+renderSimplifiedReasonCombo();
+renderSimplifiedCatalog();
+attachSimplifiedFormListeners();
+updateQuickStats();
 updateContextSummary();
 setLoginResetStatus("");
 setPasswordResetStatus("Password reset links are available after sign in.");
@@ -921,6 +925,63 @@ function updateContextSummary() {
   dom.reasonLockState.className = "status-chip status-sent";
 }
 
+function updateQuickStats() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+
+  const todayEntries = auditEntries.filter(e => {
+    const entryDate = new Date(Number(e.createdAtMs || 0));
+    entryDate.setHours(0, 0, 0, 0);
+    return entryDate.getTime() === todayMs && e.status === "applied";
+  });
+
+  const todayPoints = todayEntries.reduce((sum, e) => {
+    const c = e.changes || {};
+    return sum + (c.red || 0) + (c.white || 0) + (c.blue || 0) + (c.silver || 0);
+  }, 0);
+
+  const currentScores = { red: 0, white: 0, blue: 0, silver: 0 };
+  houses.forEach(h => {
+    currentScores[h.id] = Number(currentScores[h.id] || 0);
+  });
+
+  let leader = "–";
+  let maxScore = -Infinity;
+  houses.forEach(house => {
+    const score = Number(currentScores[house.id] || 0);
+    if (score > maxScore) {
+      maxScore = score;
+      leader = house.name.split(" ")[0];
+    }
+  });
+
+  let trend = "–";
+  const weekAgo = todayMs - (7 * 24 * 60 * 60 * 1000);
+  const weekEntries = auditEntries.filter(e => Number(e.createdAtMs || 0) >= weekAgo && e.status === "applied");
+  if (weekEntries.length > 0 && todayEntries.length > 0) {
+    const avgPerDay = weekEntries.length / 7;
+    const todayCount = todayEntries.length;
+    if (todayCount > avgPerDay * 1.1) trend = "↑";
+    else if (todayCount < avgPerDay * 0.9) trend = "↓";
+    else trend = "→";
+  }
+
+  const activeHouses = new Set();
+  auditEntries.forEach(e => {
+    const c = e.changes || {};
+    if (c.red) activeHouses.add("Red");
+    if (c.white) activeHouses.add("White");
+    if (c.blue) activeHouses.add("Blue");
+    if (c.silver) activeHouses.add("Silver");
+  });
+
+  if (dom.todayPointsCount) dom.todayPointsCount.textContent = String(todayPoints);
+  if (dom.currentLeaderName) dom.currentLeaderName.textContent = leader;
+  if (dom.weekTrendIndicator) dom.weekTrendIndicator.textContent = trend;
+  if (dom.activeHousesCount) dom.activeHousesCount.textContent = String(activeHouses.size);
+}
+
 function renderReasonTracker() {
   if (!dom.reasonTracker) return;
   const totalByHouse = { red: 0, white: 0, blue: 0, silver: 0 };
@@ -1267,16 +1328,111 @@ function renderHouseCards() {
         return;
       }
       const roleButton = target.closest("button[data-role]");
-      if (!roleButton) return;
-      if (roleButton.dataset.role === "custom-add") {
-        void submitCustomDelta(house.id, 1);
+      if (roleButton) {
+        if (roleButton.dataset.role === "custom-add") {
+          void submitCustomDelta(house.id, 1);
+        }
+        if (roleButton.dataset.role === "custom-subtract") {
+          void submitCustomDelta(house.id, -1);
+        }
+        return;
       }
-      if (roleButton.dataset.role === "custom-subtract") {
-        void submitCustomDelta(house.id, -1);
+      if (simplifiedScoreAmount > 0) {
+        void submitHouseDelta(house.id, simplifiedScoreAmount);
       }
     });
 
     dom.housesContainer.appendChild(card);
+  });
+}
+
+let simplifiedScoreAmount = 0;
+
+function renderSimplifiedReasonCombo() {
+  const input = document.getElementById("reasonComboInput");
+  const datalist = document.getElementById("reasonSuggestions");
+  if (!input || !datalist) return;
+
+  const recent = recentReasonsForRoute(8);
+  const templates = REASON_TEMPLATE_BANK;
+  const combined = [...new Set([...recent, ...templates])].slice(0, 12);
+
+  datalist.innerHTML = combined.map(reason =>
+    `<option value="${reason.replace(/"/g, '&quot;')}">`
+  ).join("");
+}
+
+function renderSimplifiedCatalog() {
+  const select = document.getElementById("classificationSelect");
+  if (!select || !eventCatalog) return;
+
+  select.innerHTML = '<option value="">Select event...</option>';
+
+  eventCatalog.categories.forEach(category => {
+    category.events.forEach(event => {
+      event.subevents.forEach(subevent => {
+        const option = document.createElement("option");
+        option.value = `${category.id}|${event.id}|${subevent.id}`;
+        option.textContent = `${category.name} • ${event.name} • ${subevent.name}`;
+        select.appendChild(option);
+      });
+    });
+  });
+}
+
+function buildSimplifiedContext() {
+  const reasonInput = document.getElementById("reasonComboInput");
+  const classSelect = document.getElementById("classificationSelect");
+  if (!reasonInput || !classSelect) return null;
+
+  const reason = String(reasonInput.value || "").trim();
+  const classification = String(classSelect.value || "").trim();
+  const amount = simplifiedScoreAmount || 0;
+
+  if (!reason || !classification || !amount) return null;
+
+  const [catId, evId, subId] = classification.split("|");
+  const category = getCategoryById(catId);
+  const event = getEventById(category, evId);
+  const subevent = getSubeventById(event, subId);
+
+  if (!category || !event || !subevent) return null;
+
+  return {
+    categoryId: category.id,
+    categoryName: category.name,
+    eventId: event.id,
+    eventName: event.name,
+    subeventId: subevent.id,
+    subeventName: subevent.name,
+    reason,
+    amount,
+    pathLabel: `${category.name} > ${event.name} > ${subevent.name}`
+  };
+}
+
+function attachSimplifiedFormListeners() {
+  document.getElementById("reasonComboInput")?.addEventListener("input", () => {
+    renderSimplifiedReasonCombo();
+  });
+
+  document.getElementById("classificationSelect")?.addEventListener("change", () => {
+    renderSimplifiedReasonCombo();
+  });
+
+  document.querySelectorAll(".btn-amount").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".btn-amount").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      simplifiedScoreAmount = Number(btn.dataset.amount || 0);
+      const customInput = document.getElementById("customAmountInput");
+      if (customInput) customInput.value = "";
+    });
+  });
+
+  document.getElementById("customAmountInput")?.addEventListener("input", (e) => {
+    document.querySelectorAll(".btn-amount").forEach(b => b.classList.remove("selected"));
+    simplifiedScoreAmount = Number(e.target.value || 0);
   });
 }
 
@@ -2779,6 +2935,114 @@ async function requestPointsSync() {
   }
 }
 
+let csvPreviewData = [];
+
+function handleCsvImportClick(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    document.getElementById("importPreviewStatus").textContent = "No file selected.";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const content = String(e.target?.result || "").trim();
+      const lines = content.split("\n");
+      csvPreviewData = lines.slice(0, 20).map(line => {
+        const parts = line.split("\t");
+        return { house: parts[0]?.trim() || "", points: parts[1]?.trim() || "", reason: parts[2]?.trim() || "", date: parts[3]?.trim() || "" };
+      }).filter(row => row.house && row.points);
+
+      const statusEl = document.getElementById("importPreviewStatus");
+      const listEl = document.getElementById("importPreviewList");
+      const btnEl = document.getElementById("importPointsBtn");
+
+      if (csvPreviewData.length === 0) {
+        statusEl.textContent = "No valid rows found in CSV.";
+        listEl.innerHTML = "";
+        btnEl.hidden = true;
+        return;
+      }
+
+      statusEl.textContent = `Ready to import ${csvPreviewData.length} entries: Red, White, Blue, Silver houses with points and reasons.`;
+      listEl.innerHTML = csvPreviewData.map(row => `<li style="padding:6px; border-bottom:1px solid #e0e0e0; font-size:12px;">${row.house.toUpperCase()} +${row.points} • ${row.reason} (${row.date})</li>`).join("");
+      btnEl.hidden = false;
+    } catch (err) {
+      showToast(`CSV parse error: ${err.message}`, "warn");
+      document.getElementById("importPreviewStatus").textContent = "Error parsing CSV file.";
+      document.getElementById("importPointsBtn").hidden = true;
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function submitCsvImport() {
+  if (csvPreviewData.length === 0) {
+    showToast("No preview data. Select a CSV file first.", "warn");
+    return;
+  }
+
+  if (!can("approveProposals")) {
+    showToast("Only admins can import point data.", "warn");
+    return;
+  }
+
+  showToast("Importing points... (processing)", "info");
+
+  try {
+    const batch = writeBatch(db);
+    let totalRed = 0, totalWhite = 0, totalBlue = 0, totalSilver = 0;
+
+    csvPreviewData.forEach(row => {
+      const houseId = row.house.toLowerCase();
+      if (!["red", "white", "blue", "silver"].includes(houseId)) return;
+
+      const points = parseInt(row.points, 10);
+      const dateStr = row.date.trim();
+      const [m, d, y] = dateStr.split("/").map(x => parseInt(x, 10));
+      const fullYear = y < 50 ? 2000 + y : 1900 + y;
+      const date = new Date(fullYear, m - 1, d);
+      const timeMs = date.getTime();
+
+      const auditEntry = {
+        type: "imported",
+        status: "applied",
+        summary: `${row.reason} (+${points})`,
+        changes: {
+          red: houseId === "red" ? points : 0,
+          white: houseId === "white" ? points : 0,
+          blue: houseId === "blue" ? points : 0,
+          silver: houseId === "silver" ? points : 0
+        },
+        createdAtMs: timeMs,
+        createdAt: serverTimestamp(),
+        actorEmail: "csv-import",
+        actorUid: currentUserUid
+      };
+
+      if (houseId === "red") totalRed += points;
+      if (houseId === "white") totalWhite += points;
+      if (houseId === "blue") totalBlue += points;
+      if (houseId === "silver") totalSilver += points;
+
+      const docRef = doc(collection(scoresDoc, "auditLog"), `${timeMs}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+      batch.set(docRef, auditEntry);
+    });
+
+    batch.update(scoresDoc, { red: totalRed, white: totalWhite, blue: totalBlue, silver: totalSilver });
+    await batch.commit();
+
+    showToast(`✅ Imported ${csvPreviewData.length} point entries successfully!`, "success");
+    document.getElementById("importPreviewList").innerHTML = "";
+    document.getElementById("importPreviewStatus").textContent = "Import complete!";
+    document.getElementById("importPointsBtn").hidden = true;
+    csvPreviewData = [];
+  } catch (err) {
+    showToast(`Import failed: ${err.message}`, "warn");
+  }
+}
+
 async function sendPasswordResetLink() {
   if (!can("passwordReset")) {
     showToast("Your role cannot send password reset links.", "warn");
@@ -3591,6 +3855,14 @@ function setupEventListeners() {
     void requestPointsSync();
   });
 
+  document.getElementById("pointsCsvImport")?.addEventListener("change", handleCsvImportClick);
+  document.getElementById("importPointsBtn")?.addEventListener("click", () => {
+    void submitCsvImport();
+  });
+  document.getElementById("exportPointsCsvBtn")?.addEventListener("click", () => {
+    showToast("CSV export coming soon!", "info");
+  });
+
   dom.refreshUsersBtn.addEventListener("click", () => {
     void refreshUserList();
   });
@@ -3714,6 +3986,7 @@ function startLiveListeners() {
       renderReasonTracker();
       renderHistoryList();
       renderActivityList();
+      updateQuickStats();
     },
     error => {
       console.error(error);
