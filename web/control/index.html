@@ -67,66 +67,68 @@
     </div>
   </header>
 
-  <section class="reason-lock" id="reasonLockPanel" data-workspace-panel="scoring">
-    <div class="reason-lock-head">
-      <strong>Event Session</strong>
-      <span id="contextStatus" class="status-chip">Ready</span>
-    </div>
-
-    <div class="event-session-grid">
-      <div class="form-step form-step-event">
-        <label class="form-label">Event</label>
-        <input id="eventSearchInput" type="text" maxlength="80" placeholder="Search event tags (example: announcements, basketball)" data-action-control autocomplete="off">
-        <div id="quickEventTags" class="event-chip-row"></div>
-        <div id="eventSuggestions" class="tag-suggestions"></div>
-        <div id="eventSelectedDisplay" class="event-selected" hidden></div>
+  <section class="scoring-unified-panel" data-workspace-panel="scoring">
+    <section class="reason-lock" id="reasonLockPanel">
+      <div class="reason-lock-head">
+        <strong>Event Session</strong>
+        <span id="contextStatus" class="status-chip">Ready</span>
       </div>
 
-      <div class="form-step form-step-reason" id="reasonStep" hidden>
-        <label class="form-label">Reason</label>
-        <input id="reasonComboInput" type="text" maxlength="80" placeholder="What points are for..." data-action-control list="reasonSuggestions" autocomplete="off">
-        <datalist id="reasonSuggestions"></datalist>
-        <div id="recentReasons" class="reason-pill-row"></div>
-        <input id="notesInput" type="text" maxlength="160" placeholder="Optional details (who/what)" data-action-control>
+      <div class="event-session-grid">
+        <div class="form-step form-step-event">
+          <label class="form-label">Event</label>
+          <input id="eventSearchInput" type="text" maxlength="80" placeholder="Search event tags (example: announcements, basketball)" data-action-control autocomplete="off">
+          <div id="quickEventTags" class="event-chip-row"></div>
+          <div id="eventSuggestions" class="tag-suggestions"></div>
+          <div id="eventSelectedDisplay" class="event-selected" hidden></div>
+        </div>
+
+        <div class="form-step form-step-reason" id="reasonStep" hidden>
+          <label class="form-label">Reason</label>
+          <input id="reasonComboInput" type="text" maxlength="80" placeholder="What points are for..." data-action-control list="reasonSuggestions" autocomplete="off">
+          <datalist id="reasonSuggestions"></datalist>
+          <div id="recentReasons" class="reason-pill-row"></div>
+          <input id="notesInput" type="text" maxlength="160" placeholder="Optional details (who/what)" data-action-control>
+        </div>
+
+        <select id="classificationSelect" data-action-control hidden>
+          <option value="">Select event...</option>
+        </select>
+
+        <div class="session-actions-row">
+          <button id="reasonCommitBtn" class="btn btn-primary" type="button" data-action-control>Start / Update Event</button>
+          <button id="applyEventDraftBtn" class="btn btn-outline" type="button" data-action-control>Apply Pending Changes</button>
+          <button id="endEventBtn" class="btn btn-ghost" type="button" data-action-control>End Event</button>
+        </div>
       </div>
 
-      <select id="classificationSelect" data-action-control hidden>
-        <option value="">Select event...</option>
-      </select>
+      <!-- Hidden elements kept for backward compatibility -->
+      <input id="reasonInput" type="hidden">
+      <input id="reasonDetailInput" type="hidden">
+      <input id="sessionInput" type="hidden">
+      <button id="requestPathBtn" hidden type="button"></button>
+      <select id="reasonTemplateSelect" hidden></select>
+      <select id="usedReasonSelect" hidden></select>
+      <select id="categorySelect" hidden></select>
+      <select id="eventSelect" hidden></select>
+      <select id="subeventSelect" hidden></select>
+      <select id="eventModeSelect" hidden></select>
+      <input id="seasonInput" type="hidden">
+      <input id="customReasonInput" type="hidden">
+      <button id="useReasonTemplateBtn" hidden type="button"></button>
+      <button id="applyUsedReasonBtn" hidden type="button"></button>
+      <input id="tagSearchInput" type="hidden">
+      <div id="tagSuggestions" hidden></div>
+      <div id="selectedTags" hidden></div>
 
-      <div class="session-actions-row">
-        <button id="reasonCommitBtn" class="btn btn-primary" type="button" data-action-control>Start / Update Event</button>
-        <button id="applyEventDraftBtn" class="btn btn-outline" type="button" data-action-control>Apply Pending Changes</button>
-        <button id="endEventBtn" class="btn btn-ghost" type="button" data-action-control>End Event</button>
+      <div class="reason-lock-actions">
+        <p id="contextSummary" class="muted">Pick an event and reason to start a session.</p>
+        <div id="reasonTracker" class="reason-tracker"></div>
       </div>
-    </div>
+    </section>
 
-    <!-- Hidden elements kept for backward compatibility -->
-    <input id="reasonInput" type="hidden">
-    <input id="reasonDetailInput" type="hidden">
-    <input id="sessionInput" type="hidden">
-    <button id="requestPathBtn" hidden type="button"></button>
-    <select id="reasonTemplateSelect" hidden></select>
-    <select id="usedReasonSelect" hidden></select>
-    <select id="categorySelect" hidden></select>
-    <select id="eventSelect" hidden></select>
-    <select id="subeventSelect" hidden></select>
-    <select id="eventModeSelect" hidden></select>
-    <input id="seasonInput" type="hidden">
-    <input id="customReasonInput" type="hidden">
-    <button id="useReasonTemplateBtn" hidden type="button"></button>
-    <button id="applyUsedReasonBtn" hidden type="button"></button>
-    <input id="tagSearchInput" type="hidden">
-    <div id="tagSuggestions" hidden></div>
-    <div id="selectedTags" hidden></div>
-
-    <div class="reason-lock-actions">
-      <p id="contextSummary" class="muted">Pick an event and reason to start a session.</p>
-      <div id="reasonTracker" class="reason-tracker"></div>
-    </div>
+    <section class="houses" id="housesContainer"></section>
   </section>
-
-  <section class="houses" id="housesContainer" data-workspace-panel="scoring"></section>
 
   <!-- Tag Selection Modal -->
   <div id="tagModalOverlay" class="tag-modal" hidden>

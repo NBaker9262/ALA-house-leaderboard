@@ -3925,8 +3925,23 @@ textarea:focus {
   border-radius: 22px;
 }
 
+.scoring-unified-panel {
+  margin-top: 14px;
+  border: 1px solid rgba(197, 214, 243, 0.9);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 247, 255, 0.82));
+  box-shadow: 0 10px 24px rgba(24, 46, 89, 0.1);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
 .reason-lock {
   margin-top: 14px;
+}
+
+.scoring-unified-panel .reason-lock {
+  margin-top: 0;
 }
 
 .event-session-grid {
@@ -3958,6 +3973,10 @@ textarea:focus {
 .houses {
   margin-top: 14px;
   gap: 16px;
+}
+
+.scoring-unified-panel .houses {
+  margin-top: 0;
 }
 
 .card {
