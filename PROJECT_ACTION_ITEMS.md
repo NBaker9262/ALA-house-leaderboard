@@ -1,107 +1,82 @@
 # Project Action Items
 
-**Last Updated:** 2026-03-29 (UTC)
-**Current Phase:** Tag System Implementation + UI Redesign
+Last updated: 2026-04-02 (UTC)
+Purpose: rolling checklist to update after each major Codex prompt.
 
----
+## Done This Pass
+- Fixed Codespaces forwarded-port PWA issue by disabling manifest/service-worker on `*.app.github.dev` / `*.github.dev`.
+- Added event-first quick scoring:
+  - event tag live search with fuzzy matching and custom tag fallback
+  - lower-case normalization for event matching
+  - fast event chips (`announcements`, `assembly`, `basketball`, etc.)
+  - reason step shown only after event selection
+- Simplified house card scoring UX:
+  - removed repetitive per-card `Tag Score +` button
+  - primary flow is now "select amount -> click house"
+- Redesigned timeline readability:
+  - grouped by event path
+  - group-level net delta chips
+  - clearer reason/notes visibility per entry
+- Reorganized workspace navigation:
+  - moved `Scoring / Timeline / Approvals / Recent / Analytics` into hamburger drawer
+  - added current workspace strip with quick switch button
+- Moved contact/help actions into floating assist buttons (`Help`, `Contact`).
+- Hardened UI overlay controls to include workspace drawer open/close handling.
+- Added push safety guardrails:
+  - new `scripts/admin/prepush-safety-check.mjs`
+  - `npm run safety:check`
+  - strengthened `.gitignore` patterns for key/credential formats.
+- Fixed `web/control/index.html` structure and restored missing `Help` trigger.
+- Fixed runtime ID mismatches (`recentReasons`, `helpOpenBtn`) and added safe help handlers.
+- Fixed Firestore import gaps in `web/control/control.js` (`addDoc`, `updateDoc`, `increment`).
+- Replaced broken blob service-worker registration with stable `./service-worker.js`.
+- Simplified and hardened `web/control/service-worker.js`.
+- Updated `web/control/manifest.json` to use portable relative URLs.
+- Updated `firestore.rules` to align with app collections and auth patterns:
+  - `userProfiles/{uid}`
+  - `eventTags`
+  - `eventTagProposals` (+ backward-compatible `tagProposals`)
+  - `contactMessages`
+- Added root redirects for local live-server convenience:
+  - `control.html`
+  - `leaderboard.html`
+- Updated `scripts/admin/init-tags.mjs` to use modern ADC + schema-compatible tags.
+- Cleaned root clutter by archiving legacy markdowns to `docs/archive/legacy-root/`.
+- Removed unused duplicates:
+  - `web/manifest.json`
+  - `web/control/control-single-file.html`
+  - `scripts/admin/bootstrap-tags.mjs`
 
-## ACTIVE NOW - Tag System Core (Phase 1)
+## Open (Do Next)
+1. Deploy Firestore rules:
+   - `firebase deploy --only firestore:rules`
+2. Initialize event tags in Firestore:
+   - `node scripts/admin/init-tags.mjs --apply`
+3. Verify GitHub Actions secrets are present:
+   - `GCP_CREDENTIALS_JSON`
+   - `FIREBASE_PROJECT_ID`
+   - `GOOGLE_SHEET_ID`
+4. Confirm Google Sheet is shared with service-account `client_email`.
+5. Run `Sheet Auto Sync` workflow once manually from GitHub Actions.
+6. Smoke-test production:
+   - `/control/` login + scoring
+   - reset-password email
+   - student lookup
+   - manual sync request
+   - proposal approval
+7. Optional UX cleanup phase:
+   - remove legacy hidden form fields and old tag modal once event-first scoring is fully accepted
+   - split `web/control/control.js` into modules (`workspace`, `scoring`, `history`, `admin`) for maintainability
 
-### ✅ Completed
-- [x] Created tag fuzzy matching utility (`web/control/tag-utils.js`)
-- [x] Updated Firestore rules for `eventTags` and `tagProposals` collections
-- [x] Created tag bootstrap script (`scripts/admin/init-tags.mjs`)
-- [x] Updated scripts README with tag setup docs
-- [x] Added tag selector UI markup to `web/control/index.html`
-- [x] Added tag selector CSS styling to `web/control/control.css`
+## Local Run (Codespaces)
+- Firebase local hosting:
+  - `firebase serve`
+  - open `http://localhost:5000/control/`
+- VS Code Live Server / static server:
+  - open `/control.html`
+  - open `/leaderboard.html`
 
-### 🔄 In Progress Now
-- [ ] **Wire tag selector logic in `control.js`**
-  - Load tags from Firestore on page load
-  - Implement search/filter with fuzzy matching
-  - Handle tag selection and deselection
-  - Track recently used tags per user
-  - Implement tag proposal flow for custom tags
-
-### ⏭️ Next (Phase 2)
-
-#### UI/UX Redesign
-- [ ] Create role-specific scoring forms
-  - Helper: simple 3-step form (House → Points → Reason → Tag → Submit)
-  - Admin: dual-panel (approval queue + direct-add)
-  - Superadmin: all above + management tools
-- [ ] Reorganize scoring panel layout for clarity
-- [ ] Move place awards to collapsible advanced section
-- [ ] Simplify event context controls
-
-#### Tag Management (Admin Drawer)
-- [ ] Add tag CRUD UI (create, edit, disable, delete)
-- [ ] Add bulk tag import from existing reasons
-- [ ] Add tag usage statistics
-- [ ] Review and approve tag proposals from helpers
-
-#### History & Filtering
-- [ ] Update history view to group by tags
-- [ ] Add tag-based filtering
-- [ ] Show tag usage metrics
-
-#### Sync & Integration
-- [ ] Update sync script to handle tags (`scripts/admin/auto-sync.mjs`)
-- [ ] Export tags to Google Sheet `Automatic Points` tab
-- [ ] Import tag proposals from manual sheet edits
-
----
-
-## Prerequisites (Setup)
-
-These must be done before Phase 2:
-1. [ ] Deploy updated Firestore rules:
-   ```bash
-   firebase deploy --only firestore:rules
-   ```
-
-2. [ ] Initialize default tags:
-   ```bash
-   node scripts/admin/init-tags.mjs --apply
-   ```
-
-3. [ ] GitHub Actions Secrets (if not done already):
-   - `GCP_CREDENTIALS_JSON` (service account JSON)
-   - `FIREBASE_PROJECT_ID` (ala-house-leaderboard)
-   - `GOOGLE_SHEET_ID` (1ko1Hhpbv00xsarwFRMgpt9kT5K7c-6td2h34PqtNJGM)
-
-4. [ ] Share Google Sheet with service account email
-
----
-
-## Testing & Validation
-
-- [ ] Test tag fuzzy matching (typos, caps, spacing)
-- [ ] Test helper tag proposal workflow
-- [ ] Test admin tag approval/rejection
-- [ ] Test scoring with tags end-to-end
-- [ ] Test backup/restore with tag data
-- [ ] Verify sync to Google Sheet includes tags
-- [ ] Mobile responsiveness on tag selector
-
----
-
-## Cleanup & Polish
-
-- [ ] Remove old event context nested menu system (after new flow is live)
-- [ ] Visual consistency pass across all UI sections
-- [ ] Update help modal with tag system explanation
-- [ ] Document tag system in admin guide
-
----
-
-## Reference
-
-- **Detailed rollout guide:** [ROLLING_CHANGELOG_AND_ACTIONS.md](ROLLING_CHANGELOG_AND_ACTIONS.md)
-- **Full redesign plan:** [REDESIGN_PLAN.md](REDESIGN_PLAN.md)
-- **File locations:**
-  - Fuzzy matching: `web/control/tag-utils.js`
-  - Firestore rules: `firestore.rules` (lines 125-147)
-  - Tag bootstrap: `scripts/admin/init-tags.mjs`
-  - UI markup: `web/control/index.html` (lines 93-110)
-  - UI styles: `web/control/control.css` (lines 1471-1543)
+## Reference Files
+- Setup: `docs/SETUP_GUIDE.md`
+- Full implementation context: `COMPREHENSIVE_IMPLEMENTATION_GUIDE.md`
+- Admin script docs: `scripts/README.md`

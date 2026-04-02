@@ -1,14 +1,15 @@
 # ALA House Leaderboard - Points Tracking System
 
-**Status:** Production Ready with Tag System Implementation
+**Status:** Active Production Project (stabilized April 2026)
 
 ---
 
 ## Quick Links
 
 - **Setup Guide:** [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md) ← **START HERE**
+- **Comprehensive Guide:** [`COMPREHENSIVE_IMPLEMENTATION_GUIDE.md`](COMPREHENSIVE_IMPLEMENTATION_GUIDE.md)
 - **Action Items:** [`PROJECT_ACTION_ITEMS.md`](PROJECT_ACTION_ITEMS.md)
-- **Implementation Details:** [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md)
+- **Admin Scripts:** [`scripts/README.md`](scripts/README.md)
 
 ---
 
@@ -37,17 +38,33 @@ A real-time house points leaderboard system for ALA student government. Students
    node scripts/admin/init-tags.mjs --apply
    ```
 
-3. Test in browser:
+3. Test in browser (Firebase local hosting):
    ```bash
    firebase serve
-   # Open: http://localhost:5000/web/control/
+   # Open: http://localhost:5000/control/
    ```
 
 ### Already Set Up?
 
 ```bash
 firebase serve
-# http://localhost:5000/web/control/
+# http://localhost:5000/control/
+```
+
+### Before Any Push (Safety)
+
+```bash
+npm run safety:check
+```
+
+This blocks tracked service-account/private-key files before you push.
+
+### GitHub Codespaces + Live Server
+
+```bash
+# Open these in the browser when using VS Code Live Server:
+# /control.html
+# /leaderboard.html
 ```
 
 ---
@@ -93,7 +110,7 @@ firebase serve
 ├── web/
 │   ├── control/                ← Admin panel
 │   │   ├── index.html          (markup)
-│   │   ├── control.js          (1700+ lines of logic)
+│   │   ├── control.js          (application logic)
 │   │   ├── control.css         (responsive styling)
 │   │   └── tag-utils.js        (tag matching utilities)
 │   └── leaderboard/            ← Public view
@@ -107,7 +124,8 @@ firebase serve
 ├── firestore.rules             ← Security model
 ├── firebase.json               ← Firebase config
 ├── .github/workflows/          ← GitHub Actions automation
-└── PROJECT_ACTION_ITEMS.md     ← What's left to do
+├── PROJECT_ACTION_ITEMS.md     ← Current open tasks
+└── docs/archive/legacy-root/   ← Archived older writeups
 ```
 
 ---
@@ -139,12 +157,17 @@ firebase serve
 
 ## Deployment
 
-### Local Development
+### Local Development (Firebase)
 ```bash
 npm install
 firebase login
 firebase serve
 ```
+
+### Local Development (Simple Static Server)
+Use the root redirect files:
+- `control.html` → `web/control/index.html`
+- `leaderboard.html` → `web/leaderboard/index.html`
 
 ### Production Deploy
 ```bash
@@ -192,5 +215,5 @@ Internal project for ALA Student Government. Not for public distribution.
 
 ---
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-02
 **Maintainers:** StuGo Tech Team

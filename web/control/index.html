@@ -12,7 +12,6 @@
 <title>House Points Control</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="control.css" />
-<link rel="manifest" href="manifest.json" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect fill='%23406ac8' width='128' height='128'/><text x='64' y='95' font-size='60' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>HP</text></svg>" />
 </head>
 
@@ -52,11 +51,15 @@
     </div>
 
     <div class="topbar-actions">
-      <button id="helpOpenBtn" class="icon-btn" type="button" aria-label="Open help" title="Help" data-action-control>
-        <span aria-hidden="true">?</span>
+      <button id="notificationsBtn" class="icon-btn" type="button" aria-label="Open notifications" title="Notifications" data-action-control>
+        <span aria-hidden="true">🔔</span>
+        <span id="notificationsBadge" class="notif-badge" hidden>0</span>
+      </button>
+      <button id="workspaceMenuBtn" class="icon-btn" type="button" aria-label="Open workspace menu" title="Workspaces" data-action-control>
+        <span class="icon-bars" aria-hidden="true"></span>
       </button>
       <button id="adminMenuBtn" class="icon-btn" type="button" aria-label="Open admin management" title="Admin Management" data-action-control>
-        <span class="icon-bars" aria-hidden="true"></span>
+        <span aria-hidden="true">⚙</span>
       </button>
       <button id="profileMenuBtn" class="icon-btn icon-profile" type="button" aria-label="Open profile" title="Profile" data-action-control>
         <span id="profileInitials" aria-hidden="true">--</span>
@@ -64,90 +67,37 @@
     </div>
   </header>
 
-  <section class="quick-stats-card">
-    <div class="stat-item">
-      <div class="stat-label">Today's Points</div>
-      <div class="stat-value" id="todayPointsCount">--</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Current Leader</div>
-      <div class="stat-value" id="currentLeaderName">--</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">This Week</div>
-      <div class="stat-value" id="weekTrendIndicator">--</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Active Houses</div>
-      <div class="stat-value" id="activeHousesCount">--</div>
-    </div>
-  </section>
-
-  <section class="workspace-nav" id="workspaceNav">
-    <button class="btn btn-ghost workspace-tab is-active" type="button" data-workspace-tab="scoring" data-action-control>Scoring</button>
-    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="history" data-action-control>History</button>
-    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="queue" data-action-control>Approvals</button>
-    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="activity" data-action-control>Recent</button>
-    <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="analytics" data-action-control>Analytics</button>
-  </section>
-
   <section class="reason-lock" id="reasonLockPanel" data-workspace-panel="scoring">
     <div class="reason-lock-head">
-      <strong>Quick Scoring</strong>
+      <strong>Event Session</strong>
       <span id="contextStatus" class="status-chip">Ready</span>
     </div>
 
-    <div class="quick-scoring-form">
-      <div class="form-step">
-        <label class="form-label">Step 1: Select Reason</label>
-        <input id="reasonComboInput" type="text" maxlength="80" placeholder="Type or select reason..." data-action-control list="reasonSuggestions" autocomplete="off">
+    <div class="event-session-grid">
+      <div class="form-step form-step-event">
+        <label class="form-label">Event</label>
+        <input id="eventSearchInput" type="text" maxlength="80" placeholder="Search event tags (example: announcements, basketball)" data-action-control autocomplete="off">
+        <div id="quickEventTags" class="event-chip-row"></div>
+        <div id="eventSuggestions" class="tag-suggestions"></div>
+        <div id="eventSelectedDisplay" class="event-selected" hidden></div>
+      </div>
+
+      <div class="form-step form-step-reason" id="reasonStep" hidden>
+        <label class="form-label">Reason</label>
+        <input id="reasonComboInput" type="text" maxlength="80" placeholder="What points are for..." data-action-control list="reasonSuggestions" autocomplete="off">
         <datalist id="reasonSuggestions"></datalist>
-        <div id="recentReasonsDisplay" class="reason-pill-row"></div>
+        <div id="recentReasons" class="reason-pill-row"></div>
+        <input id="notesInput" type="text" maxlength="160" placeholder="Optional details (who/what)" data-action-control>
       </div>
 
-      <div class="form-step">
-        <label class="form-label">Step 2: Event Classification</label>
-        <select id="classificationSelect" data-action-control>
-          <option value="">Select event...</option>
-        </select>
-      </div>
+      <select id="classificationSelect" data-action-control hidden>
+        <option value="">Select event...</option>
+      </select>
 
-      <div class="form-step">
-        <label class="form-label">Step 3: Quick Amount</label>
-        <div class="quick-amount-buttons">
-          <button class="btn btn-mini btn-amount" type="button" data-amount="50" data-action-control>+50</button>
-          <button class="btn btn-mini btn-amount" type="button" data-amount="30" data-action-control>+30</button>
-          <button class="btn btn-mini btn-amount" type="button" data-amount="15" data-action-control>+15</button>
-          <button class="btn btn-mini btn-amount" type="button" data-amount="10" data-action-control>+10</button>
-        </div>
-        <div class="custom-amount-field">
-          <label for="customAmountInput">Or enter custom:</label>
-          <input id="customAmountInput" type="number" min="1" placeholder="Custom amount" data-action-control>
-        </div>
-      </div>
-
-      <div class="form-step">
-        <label class="form-label">Step 4: Select House</label>
-        <p class="muted">Click a house card below to apply</p>
-      </div>
-
-      <div class="form-step form-step-expand" id="tagSelectorExpand">
-        <label class="form-label expand-toggle">
-          <input type="checkbox" id="tagSelectorToggle" />
-          <span>Optional: Notes & Tags</span>
-          <span class="expand-icon">▶</span>
-        </label>
-
-        <div class="tag-selector-section" hidden id="tagSelectorPanel">
-          <input id="notesInput" type="text" maxlength="160" placeholder="Notes (who, what, detail)" data-action-control>
-          <input id="tagSearchInput" type="text" maxlength="40" placeholder="Add tag (e.g., Basketball)..." data-action-control>
-          <div id="tagSuggestions" class="tag-suggestions"></div>
-          <div id="selectedTags" class="tag-chips"></div>
-        </div>
-      </div>
-
-      <div class="reason-lock-actions">
-        <p id="contextSummary" class="muted">Scoring ready. Select reason to begin.</p>
+      <div class="session-actions-row">
+        <button id="reasonCommitBtn" class="btn btn-primary" type="button" data-action-control>Start / Update Event</button>
+        <button id="applyEventDraftBtn" class="btn btn-outline" type="button" data-action-control>Apply Pending Changes</button>
+        <button id="endEventBtn" class="btn btn-ghost" type="button" data-action-control>End Event</button>
       </div>
     </div>
 
@@ -155,7 +105,7 @@
     <input id="reasonInput" type="hidden">
     <input id="reasonDetailInput" type="hidden">
     <input id="sessionInput" type="hidden">
-    <button id="requestPathBtn" type="hidden"></button>
+    <button id="requestPathBtn" hidden type="button"></button>
     <select id="reasonTemplateSelect" hidden></select>
     <select id="usedReasonSelect" hidden></select>
     <select id="categorySelect" hidden></select>
@@ -164,71 +114,132 @@
     <select id="eventModeSelect" hidden></select>
     <input id="seasonInput" type="hidden">
     <input id="customReasonInput" type="hidden">
-    <button id="useReasonTemplateBtn" type="hidden"></button>
-    <button id="applyUsedReasonBtn" type="hidden"></button>
+    <button id="useReasonTemplateBtn" hidden type="button"></button>
+    <button id="applyUsedReasonBtn" hidden type="button"></button>
+    <input id="tagSearchInput" type="hidden">
+    <div id="tagSuggestions" hidden></div>
+    <div id="selectedTags" hidden></div>
 
-    <div id="reasonTracker" class="reason-tracker"></div>
-
-    <div class="reason-lock-controls">
-      <button id="reasonCommitBtn" class="btn btn-primary" type="button" data-action-control>Start Context</button>
-      <button id="reasonClearBtn" class="btn btn-ghost" type="button" data-action-control>Lock</button>
+    <div class="reason-lock-actions">
+      <p id="contextSummary" class="muted">Pick an event and reason to start a session.</p>
+      <div id="reasonTracker" class="reason-tracker"></div>
     </div>
   </section>
 
   <section class="houses" id="housesContainer" data-workspace-panel="scoring"></section>
 
-  <section class="place-awards advanced-section" id="placePanel" data-workspace-panel="scoring">
-    <details class="accordion-section">
-      <summary class="accordion-header">
-        <span>Award Place Points</span>
-        <span class="accordion-icon">▼</span>
-      </summary>
-      <div class="accordion-content">
-        <div class="place-awards-header">
-          <h3>Award Place Points</h3>
-          <span class="place-hint" id="placeHint"></span>
+  <!-- Tag Selection Modal -->
+  <div id="tagModalOverlay" class="tag-modal" hidden>
+    <div class="tag-modal-scrim"></div>
+    <div class="tag-modal-panel">
+      <div class="tag-modal-header">
+        <h2 id="tagModalHouseName">Select House</h2>
+        <button id="closeTagModalBtn" class="btn-icon-close" aria-label="Close modal" type="button">×</button>
+      </div>
+
+      <!-- Tag Search -->
+      <input id="tagSearchField" type="text" placeholder="Search tags..." maxlength="60" class="tag-search-primary" autocomplete="off">
+
+      <!-- Tag Categories (grouped) -->
+      <div id="tagCategoryGroups" class="tag-category-groups"></div>
+
+      <!-- Selected Tags (chips) -->
+      <div class="tag-chips-section">
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Selected Tags:</label>
+        <div id="selectedTagsChips" class="tag-chips-display"></div>
+      </div>
+
+      <!-- Amount Section -->
+      <div class="modal-amount-section">
+        <label style="font-size: 12px; font-weight: 700; color: var(--text);">Points Amount</label>
+        <div class="amount-preset-buttons">
+          <button class="btn btn-mini btn-amount-modal" data-amount="50" type="button">+50</button>
+          <button class="btn btn-mini btn-amount-modal" data-amount="30" type="button">+30</button>
+          <button class="btn btn-mini btn-amount-modal" data-amount="15" type="button">+15</button>
+          <button class="btn btn-mini btn-amount-modal" data-amount="10" type="button">+10</button>
+        </div>
+        <input id="modalCustomAmount" type="number" placeholder="Custom amount" min="1" class="modal-custom-input">
+      </div>
+
+      <!-- Notes -->
+      <input id="modalNotesInput" type="text" maxlength="160" placeholder="Optional: Details or notes..." class="modal-notes-input">
+
+      <!-- Save Custom Tag -->
+      <label class="custom-tag-save-label">
+        <input type="checkbox" id="saveCustomTagCheckbox">
+        <span>Save tag for reuse</span>
+      </label>
+
+      <!-- Action Buttons -->
+      <div class="modal-actions">
+        <button id="cancelTagModalBtn" class="btn btn-ghost" type="button">Cancel</button>
+        <button id="applyTagsBtn" class="btn btn-primary" type="button">Apply & Score</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Contact Form Modal -->
+  <div id="emailContactFormModal" class="email-contact-modal" hidden>
+    <div class="email-modal-scrim"></div>
+    <div class="email-modal-panel">
+      <div class="email-modal-header">
+        <h2>Send us a Message</h2>
+        <button id="closeEmailFormBtn" class="btn-icon-close" aria-label="Close form" type="button">×</button>
+      </div>
+
+      <div class="email-form-fields">
+        <div class="email-form-field">
+          <label for="emailContactPurpose" style="font-weight: 600;">What's this about?</label>
+          <select id="emailContactPurpose" class="email-form-select">
+            <option value="help">Help & Support</option>
+            <option value="bug">Bug Report</option>
+            <option value="feedback">Feedback</option>
+            <option value="other">Other</option>
+          </select>
         </div>
 
-        <div class="place-rows" id="placeRows"></div>
-        <div id="placePreview" class="place-preview"></div>
+        <div class="email-form-field">
+          <label style="font-weight: 600;">Signed in as</label>
+          <div id="emailContactIdentity" class="email-identity-card">Not signed in</div>
+        </div>
 
-        <div class="place-actions">
-          <button id="autoFillBtn" class="btn btn-muted" type="button" data-action-control>Auto Fill by Score</button>
-          <button id="clearPlacesBtn" class="btn btn-ghost" type="button" data-action-control>Clear</button>
-          <button id="applyPlacesBtn" class="btn btn-primary" type="button" data-action-control>Apply Place Awards</button>
+        <div class="email-form-field">
+          <label for="emailContactSubject" style="font-weight: 600;">Subject</label>
+          <input id="emailContactSubject" type="text" class="email-form-input" placeholder="Subject..." maxlength="120">
+        </div>
+
+        <div class="email-form-field">
+          <label for="emailContactMessage" style="font-weight: 600;">Message</label>
+          <textarea id="emailContactMessage" class="email-form-textarea" placeholder="Tell us what you think..." maxlength="500" rows="4"></textarea>
         </div>
       </div>
-    </details>
-  </section>
 
-  <section class="meta advanced-section" data-workspace-panel="scoring">
-    <details class="accordion-section">
-      <summary class="accordion-header">
-        <span>Quick Actions & Settings</span>
-        <span class="accordion-icon">▼</span>
-      </summary>
-      <div class="accordion-content" style="display:flex;gap:10px;align-items:center">
-        <button id="undoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Undo Last Action" aria-label="Undo Last Action">
-          <span aria-hidden="true">↶</span>
-        </button>
-        <button id="redoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Redo" aria-label="Redo" disabled>
-          <span aria-hidden="true">↷</span>
-        </button>
-        <button id="resetBtn" class="btn btn-danger quick-icon-btn" type="button" data-action-control title="Reset All Scores" aria-label="Reset All Scores">
-          <span aria-hidden="true">⟳</span>
-        </button>
+      <div class="email-form-status" id="emailFormStatus"></div>
+
+      <div class="email-modal-actions">
+        <button id="cancelEmailFormBtn" class="btn btn-ghost" type="button">Cancel</button>
+        <button id="sendEmailFormBtn" class="btn btn-primary" type="button">Send Message</button>
       </div>
-    </details>
-  </section>
+    </div>
+  </div>
+
+  <!-- Place awards removed; keep hidden stubs for JS compatibility -->
+  <span id="placeHint" hidden></span>
+  <div id="placeRows" hidden></div>
+  <div id="placePreview" hidden></div>
+  <button id="autoFillBtn" hidden type="button"></button>
+  <button id="clearPlacesBtn" hidden type="button"></button>
+  <button id="applyPlacesBtn" hidden type="button"></button>
+  <button id="undoBtn" hidden type="button"></button>
+  <button id="redoBtn" hidden type="button" disabled></button>
 
   <section class="activity-log advanced-section" data-workspace-panel="history">
     <details class="accordion-section">
       <summary class="accordion-header">
-        <span>Activity Explorer</span>
+        <span>Timeline Explorer</span>
         <span class="accordion-icon">▼</span>
       </summary>
       <div class="accordion-content">
-        <h4>Activity Explorer</h4>
         <div id="historyStats" class="history-stats"></div>
 
         <div class="history-tools">
@@ -311,6 +322,11 @@
     <ul id="proposalList"><li class="log-empty">No pending suggestions</li></ul>
   </section>
 
+  <section class="activity-log" data-workspace-panel="activity">
+    <h4>Recent Activity</h4>
+    <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
+  </section>
+
   <section class="activity-log" data-workspace-panel="analytics">
     <h4>Analytics Dashboard</h4>
     <p class="muted">House performance and activity metrics</p>
@@ -327,6 +343,20 @@
         <button id="analyticsExportCsvBtn" class="btn btn-ghost btn-mini" type="button" data-action-control>Export CSV</button>
         <button id="analyticsExportPdfBtn" class="btn btn-ghost btn-mini" type="button" data-action-control>Export PDF</button>
       </div>
+    </div>
+
+    <!-- House Performance Summary Cards -->
+    <div class="analytics-summary-cards" id="analyticsSummaryCards"></div>
+
+    <!-- Anomaly Alert -->
+    <div class="analytics-anomaly-alert" id="anomalyAlert" hidden></div>
+
+    <!-- Tag Filter & Charts Grid -->
+    <div class="analytics-tag-filter">
+      <label for="analyticsTagFilter" style="font-weight: 600; font-size: 13px;">Filter by Tag:</label>
+      <select id="analyticsTagFilter" class="analytics-select">
+        <option value="">All Tags</option>
+      </select>
     </div>
 
     <div class="analytics-grid">
@@ -347,6 +377,22 @@
         <canvas id="chartHistoricalTrend" height="200"></canvas>
       </div>
     </div>
+
+    <!-- Fair Play Audit Trail (admin only) -->
+    <div class="analytics-audit-section" id="analyticsAuditSection" hidden>
+      <h5>Fair Play Audit</h5>
+      <div class="audit-trail-table" id="auditTrailTable"></div>
+    </div>
+  </section>
+
+  <section class="activity-log" data-workspace-panel="support" id="supportInboxWorkspace">
+    <h4>Support Inbox</h4>
+    <p class="muted">Messages sent from the Contact button.</p>
+    <div class="user-admin-actions">
+      <button id="refreshContactBtn" class="btn btn-ghost" type="button" data-action-control>Refresh Inbox</button>
+    </div>
+    <p id="contactInboxStatus" class="log-empty">No messages loaded yet.</p>
+    <ul id="contactInboxList" class="mini-list"><li class="log-empty">No messages yet.</li></ul>
   </section>
 </div>
 
@@ -367,6 +413,22 @@
       <article class="account-card">
         <h3>Permissions</h3>
         <div id="permissionGrid" class="permissions-grid"></div>
+      </article>
+
+      <article class="account-card" id="demoRoleCard">
+        <h3>Demo Role Preview</h3>
+        <p class="muted">Preview this UI as another role for demos. Real authentication does not change.</p>
+        <div class="security-actions">
+          <select id="demoRoleSelect" data-action-control>
+            <option value="">No preview (real role)</option>
+            <option value="admin">Admin</option>
+            <option value="staff">Staff</option>
+            <option value="helper">Helper</option>
+          </select>
+          <button id="applyDemoRoleBtn" class="btn btn-primary" type="button" data-action-control>Preview Role</button>
+          <button id="clearDemoRoleBtn" class="btn btn-ghost" type="button" data-action-control>Go Back</button>
+        </div>
+        <p id="demoRoleStatus" class="log-empty">Preview mode is off.</p>
       </article>
 
       <article class="account-card">
@@ -492,34 +554,61 @@
       <p id="backupStatus" class="log-empty">Backups are only visible to superadmins.</p>
       <ul id="backupList"><li class="log-empty">No backups loaded yet.</li></ul>
     </section>
+
+    <hr class="admin-divider superadmin-only">
+
+    <section class="admin-section superadmin-only" id="dangerZonePanel" hidden>
+      <h4 class="admin-section-title" style="color: var(--danger);">Danger Zone</h4>
+      <p class="admin-note">Irreversible actions. Proceed with caution.</p>
+      <div class="user-admin-actions">
+        <button id="resetBtn" class="btn btn-danger" type="button" data-action-control>Reset All Scores to Zero</button>
+      </div>
+    </section>
   </aside>
   <div class="drawer-scrim" data-close-drawer="admin"></div>
 </div>
 
-<div id="helpDialog" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpDialogTitle" hidden>
-  <div class="help-modal-card" tabindex="-1">
-    <div class="help-modal-header">
-      <h3 id="helpDialogTitle">Control Help</h3>
-      <button id="closeHelpBtn" class="btn btn-outline btn-mini" type="button">Close</button>
+<div id="workspaceDialog" class="drawer" hidden>
+  <aside class="drawer-panel drawer-panel-left" aria-label="Workspace navigation">
+    <div class="drawer-head">
+      <h3>Workspaces</h3>
+      <button id="closeWorkspaceBtn" class="btn btn-ghost btn-mini" type="button">Close</button>
     </div>
 
-    <p class="help-note">Use these controls to manage points safely during live events.</p>
-    <ul class="help-list">
-      <li>Unlock scoring with a reason before editing points.</li>
-      <li>Use place awards for fast 1st-4th scoring.</li>
-      <li>Create checkpoints before major changes.</li>
-      <li>Use Jump to Closest to restore a time-based snapshot.</li>
-      <li>Download JSON backups before large edits.</li>
-    </ul>
-  </div>
+    <nav class="workspace-drawer-nav" id="workspaceNav">
+      <button class="btn btn-ghost workspace-tab is-active" type="button" data-workspace-tab="scoring" data-action-control>Scoring</button>
+      <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="history" data-action-control>Timeline</button>
+      <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="queue" data-action-control>Approvals</button>
+      <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="activity" data-action-control>Recent</button>
+      <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="support" data-action-control>Support</button>
+      <button class="btn btn-ghost workspace-tab" type="button" data-workspace-tab="analytics" data-action-control>Analytics</button>
+    </nav>
+
+    <p class="muted">Choose a workspace to keep the panel focused and uncluttered.</p>
+  </aside>
+  <div class="drawer-scrim" data-close-drawer="workspace"></div>
 </div>
 
-  <section class="activity-log" data-workspace-panel="activity">
-    <h4>Recent Activity</h4>
-    <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
-  </section>
+<div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+<div id="notificationsPanel" class="notifications-panel" hidden>
+  <div class="notifications-head">
+    <strong>Notifications</strong>
+    <div class="notifications-head-actions">
+      <button id="clearNotificationsBtn" class="btn btn-ghost btn-mini" type="button">Clear</button>
+      <button id="closeNotificationsBtn" class="btn btn-outline btn-mini" type="button">Close</button>
+    </div>
+  </div>
+  <ul id="notificationsList" class="notifications-list"><li class="log-empty">No notifications yet.</li></ul>
+</div>
+<div id="demoRoleBanner" class="demo-role-banner" hidden>
+  <span id="demoRoleBannerText">Preview mode</span>
+  <button id="exitDemoRoleBtn" class="btn btn-mini" type="button">Back to Real Role</button>
+</div>
+<div class="assist-fab-group">
+  <button id="emailContactBtn" class="help-fab" type="button" aria-label="Open contact form" title="Contact">Contact</button>
+</div>
 
-  <div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script type="module" src="control.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script type="module" src="control.js"></script>
+</body>
+</html>

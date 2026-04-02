@@ -11,9 +11,9 @@ service cloud.firestore {
 
     function profileRole() {
       return signedIn() &&
-        exists(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)).data.role is string
-          ? get(/databases/$(database)/documents/userProfiles/$(request.auth.token.email)).data.role
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role is string
+          ? get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role
           : "";
     }
 
@@ -56,7 +56,8 @@ service cloud.firestore {
       return signedIn() && (
         isSuperadmin() ||
         isAdmin() ||
-        isStaff()
+        isStaff() ||
+        isHelper()
       );
     }
 
@@ -67,8 +68,7 @@ service cloud.firestore {
     function canProposePoints() {
       return signedIn() && (
         isSuperadmin() ||
-        isAdmin() ||
-        isHelper()
+        isAdmin()
       );
     }
 
@@ -111,8 +111,8 @@ service cloud.firestore {
       }
     }
 
-    match /userProfiles/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || isSuperadmin() || isAdmin());
+    match /userProfiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isSuperadmin() || isAdmin());
       allow create, update: if isSuperadmin();
       allow delete: if false;
     }
@@ -124,26 +124,38 @@ service cloud.firestore {
 
     match /eventTags/{tagId} {
       allow read: if hasControlAccess();
-      allow create, update: if isSuperadmin() ||
-        (isAdmin() && request.resource.data.createdBy == request.auth.uid);
+      allow create, update: if canApproveProposals();
       allow delete: if isSuperadmin();
     }
 
+    match /eventTagProposals/{proposalId} {
+      allow read: if canApproveProposals() ||
+        (signedIn() && resource.data.proposedBy == request.auth.token.email);
+
+      allow create: if hasControlAccess();
+
+      allow update: if canApproveProposals();
+
+      allow delete: if false;
+    }
+
+    // Backward compatibility for older proposal collection name.
     match /tagProposals/{proposalId} {
       allow read: if canApproveProposals() ||
         (signedIn() && resource.data.createdBy == request.auth.uid);
-
-      allow create: if canProposePoints() &&
-        request.resource.data.createdBy == request.auth.uid &&
-        request.resource.data.status == "pending" &&
-        request.resource.data.createdAt is number;
-
-      allow update: if canApproveProposals() &&
-        resource.data.status == "pending" &&
-        request.resource.data.createdBy == resource.data.createdBy &&
-        request.resource.data.status in ["approved", "rejected", "pending"];
-
+      allow create: if hasControlAccess();
+      allow update: if canApproveProposals();
       allow delete: if false;
+    }
+
+    match /contactMessages/{messageId} {
+      allow create: if signedIn() &&
+        request.resource.data.message is string &&
+        request.resource.data.email is string;
+      allow read: if canApproveProposals() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow update: if canApproveProposals();
+      allow delete: if canApproveProposals();
     }
 
     match /systemBackups/{backupId} {
