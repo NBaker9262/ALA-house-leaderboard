@@ -3977,10 +3977,44 @@ textarea:focus {
 
 .scoring-unified-panel .houses {
   margin-top: 0;
+  gap: 12px;
 }
 
 .card {
   padding: 16px;
+}
+
+.scoring-unified-panel .card {
+  gap: 10px;
+  padding: 14px;
+}
+
+.scoring-unified-panel .score-row {
+  gap: 8px;
+}
+
+.scoring-unified-panel .quick-groups {
+  gap: 8px;
+}
+
+.scoring-unified-panel .quick-group {
+  display: grid;
+  gap: 8px;
+}
+
+.scoring-unified-panel .quick-title {
+  margin-bottom: 4px;
+}
+
+.scoring-unified-panel .quick-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scoring-unified-panel .quick-buttons .btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .pending-wrap {
