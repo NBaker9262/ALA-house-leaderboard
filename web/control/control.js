@@ -330,6 +330,7 @@ const dom = {
   closeNotificationsBtn: document.getElementById("closeNotificationsBtn"),
   clearNotificationsBtn: document.getElementById("clearNotificationsBtn"),
   backupManagerPanel: document.getElementById("backupManagerPanel"),
+  dangerZonePanel: document.getElementById("dangerZonePanel"),
   backupLabelInput: document.getElementById("backupLabelInput"),
   createBackupBtn: document.getElementById("createBackupBtn"),
   refreshBackupsBtn: document.getElementById("refreshBackupsBtn"),
@@ -388,7 +389,21 @@ let localState = defaultLocalState();
 let lastHelpFocus = null;
 let eventDraftChanges = { red: 0, white: 0, blue: 0, silver: 0 };
 let eventDraftCount = 0;
-let notificationsFeed = [];
+const CONTACT_RATE_LIMIT_KEY = "ala.contactForm.lastSendMs";
+const CONTACT_RATE_LIMIT_MS = 60_000;
+const NOTIFICATIONS_STORAGE_KEY = "ala.notifications.feed";
+let notificationsFeed = (() => {
+  try {
+    const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed.slice(0, 60);
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return [];
+})();
 
 // Offline support
 let isOnline = navigator.onLine;
@@ -669,12 +684,17 @@ function renderNotifications() {
   if (!notificationsFeed.length) {
     dom.notificationsList.innerHTML = '<li class="log-empty">No notifications yet.</li>';
   } else {
-    dom.notificationsList.innerHTML = notificationsFeed.map(item => `
-      <li class="notification-item notification-${escapeHtml(item.tone)}">
-        <div class="notification-message">${escapeHtml(item.message)}</div>
-        <div class="notification-meta">${new Date(item.createdAt).toLocaleTimeString()}</div>
-      </li>
-    `).join("");
+    dom.notificationsList.innerHTML = notificationsFeed.map(item => {
+      const d = new Date(item.createdAt);
+      const isToday = d.toDateString() === new Date().toDateString();
+      const timeLabel = isToday ? d.toLocaleTimeString() : d.toLocaleDateString() + " " + d.toLocaleTimeString();
+      return `
+        <li class="notification-item notification-${escapeHtml(item.tone)}">
+          <div class="notification-message">${escapeHtml(item.message)}</div>
+          <div class="notification-meta">${timeLabel}</div>
+        </li>
+      `;
+    }).join("");
   }
 
   const count = notificationsFeed.length;
@@ -692,6 +712,11 @@ function pushNotification(message, tone = "info") {
     createdAt: Date.now()
   });
   notificationsFeed = notificationsFeed.slice(0, 60);
+  try {
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notificationsFeed));
+  } catch {
+    // storage quota exceeded or unavailable
+  }
   renderNotifications();
 }
 
@@ -1596,6 +1621,22 @@ async function sendEmailContactForm() {
     return;
   }
 
+  // Rate limiting: prevent submissions within 60 seconds
+  try {
+    const lastSend = Number(localStorage.getItem(CONTACT_RATE_LIMIT_KEY) || "0");
+    const elapsed = Date.now() - lastSend;
+    if (elapsed < CONTACT_RATE_LIMIT_MS) {
+      const waitSec = Math.ceil((CONTACT_RATE_LIMIT_MS - elapsed) / 1000);
+      if (statusDiv) {
+        statusDiv.className = "email-form-status error";
+        statusDiv.textContent = `Please wait ${waitSec} more second${waitSec === 1 ? "" : "s"} before sending another message.`;
+      }
+      return;
+    }
+  } catch {
+    // localStorage unavailable, proceed without rate limiting
+  }
+
   try {
     updateBusyState(1);
 
@@ -1618,6 +1659,7 @@ async function sendEmailContactForm() {
       statusDiv.textContent = "✅ Message sent! We'll get back to you soon.";
     }
 
+    try { localStorage.setItem(CONTACT_RATE_LIMIT_KEY, String(Date.now())); } catch { /* ignore */ }
     showToast("Message sent to Noah Baker", "success");
 
     // Close after a short delay
@@ -1985,9 +2027,9 @@ function renderHouseCards() {
       </header>
       <div class="score-row">
         <div class="points" id="pts-${house.id}">0</div>
-        <div class="pending-wrap">
+        <div class="pending-wrap" id="pending-wrap-${house.id}" ${pending === 0 ? 'hidden' : ''}>
           <span class="pending-label">Pending</span>
-          <span class="pending-value ${pending > 0 ? "delta-pos" : pending < 0 ? "delta-neg" : ""}" id="pending-${house.id}">${pending > 0 ? "+" : ""}${pending}</span>
+          <span class="pending-value ${pending > 0 ? "delta-pos" : "delta-neg"}" id="pending-${house.id}">${pending > 0 ? "+" : ""}${pending}</span>
         </div>
       </div>
       <div class="score-row">
@@ -2631,6 +2673,7 @@ function syncPermissionControlledUi() {
   if (dom.backupLabelInput) dom.backupLabelInput.disabled = currentRole !== "superadmin" || TEST_MODE;
   if (dom.sheetSyncPanel) dom.sheetSyncPanel.hidden = !can("approveProposals");
   if (dom.backupManagerPanel) dom.backupManagerPanel.hidden = currentRole !== "superadmin";
+  if (dom.dangerZonePanel) dom.dangerZonePanel.hidden = currentRole !== "superadmin";
   if (dom.demoRoleCard) dom.demoRoleCard.hidden = authenticatedRole !== "superadmin" || TEST_MODE;
   if (dom.demoRoleSelect) dom.demoRoleSelect.disabled = authenticatedRole !== "superadmin" || TEST_MODE;
   if (dom.applyDemoRoleBtn) dom.applyDemoRoleBtn.disabled = authenticatedRole !== "superadmin" || TEST_MODE;
@@ -2920,7 +2963,9 @@ function renderActivityList() {
 
   dom.activityList.innerHTML = entries.map(entry => {
     const when = new Date(Number(entry.createdAtMs || Date.now()));
-    return `<li class="log-entry"><span class="log-time">${formatClock(when)}</span><span>${entry.summary || mapActionTypeLabel(entry.type)} (${entry.actorEmail || "unknown"})</span></li>`;
+    const summary = escapeHtml(String(entry.summary || mapActionTypeLabel(entry.type)));
+    const actor = escapeHtml(String(entry.actorEmail || "unknown"));
+    return `<li class="log-entry"><span class="log-time">${formatClock(when)}</span><span>${summary} (${actor})</span></li>`;
   }).join("");
 }
 
@@ -4931,6 +4976,7 @@ function setupEventListeners() {
   dom.closeNotificationsBtn?.addEventListener("click", closeNotificationsPanel);
   dom.clearNotificationsBtn?.addEventListener("click", () => {
     notificationsFeed = [];
+    try { localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY); } catch { /* ignore */ }
     renderNotifications();
   });
   dom.workspaceSwitchBtn?.addEventListener("click", () => {
@@ -5834,13 +5880,15 @@ function renderProposalListEnhanced() {
   dom.proposalList.innerHTML = visible.map(proposal => {
     const changes = proposal.changes || {};
     const pathText = proposal.actionType === "path_request"
-      ? `${proposal.pathRequest?.categoryName || ""} > ${proposal.pathRequest?.eventName || ""} > ${proposal.pathRequest?.subeventName || ""}`
-      : (proposal.context?.pathLabel || `${proposal.context?.categoryName || ""} > ${proposal.context?.eventName || ""} > ${proposal.context?.subeventName || ""}`);
+      ? `${escapeHtml(proposal.pathRequest?.categoryName || "")} > ${escapeHtml(proposal.pathRequest?.eventName || "")} > ${escapeHtml(proposal.pathRequest?.subeventName || "")}`
+      : (proposal.context?.pathLabel
+        ? escapeHtml(String(proposal.context.pathLabel))
+        : `${escapeHtml(String(proposal.context?.categoryName || ""))} > ${escapeHtml(String(proposal.context?.eventName || ""))} > ${escapeHtml(String(proposal.context?.subeventName || ""))}`);
 
-    const meta = `${new Date(Number(proposal.createdAtMs || Date.now())).toLocaleString()} · ${proposal.createdByEmail || "unknown"}`;
+    const meta = `${new Date(Number(proposal.createdAtMs || Date.now())).toLocaleString()} · ${escapeHtml(proposal.createdByEmail || "unknown")}`;
     const title = proposal.actionType === "path_request"
       ? `Path Request: ${pathText}`
-      : `${proposal.reason || "Score Suggestion"}`;
+      : escapeHtml(proposal.reason || "Score Suggestion");
 
     const chips = proposal.actionType === "path_request"
       ? ""
@@ -5856,12 +5904,12 @@ function renderProposalListEnhanced() {
       : `<span class="proposal-status-badge proposal-status-pending">Pending</span>`;
 
     const rejection = proposal.rejectionReason
-      ? `<div class="proposal-rejection-reason">Rejected: ${proposal.rejectionReason}</div>`
+      ? `<div class="proposal-rejection-reason">Rejected: ${escapeHtml(String(proposal.rejectionReason))}</div>`
       : "";
 
     const commentsHtml = approvalComments[proposal.id]?.length > 0
       ? `<div class="proposal-comments">${approvalComments[proposal.id].map(c =>
-          `<div class="proposal-comment"><span class="proposal-comment-author">${c.author}:</span> ${c.text}<br><span class="proposal-comment-time">${new Date(c.timestamp).toLocaleString()}</span></div>`
+          `<div class="proposal-comment"><span class="proposal-comment-author">${escapeHtml(String(c.author || ""))}:</span> ${escapeHtml(String(c.text || ""))}<br><span class="proposal-comment-time">${new Date(c.timestamp).toLocaleString()}</span></div>`
         ).join("")}</div>`
       : "";
 
@@ -5875,13 +5923,13 @@ function renderProposalListEnhanced() {
           <div class="proposal-meta">${meta}</div>
           <div class="proposal-meta">${pathText}</div>
           ${chips}
-          ${proposal.notes ? `<div class="proposal-meta">Notes: ${proposal.notes}</div>` : ""}
+          ${proposal.notes ? `<div class="proposal-meta">Notes: ${escapeHtml(String(proposal.notes))}</div>` : ""}
           ${commentsHtml}
           ${rejection}
         </div>
         <div class="proposal-actions">
-          ${can("approveProposals") ? `<button class="btn btn-primary btn-mini" type="button" data-proposal-approve="${proposal.id}">Approve</button>` : ""}
-          ${can("approveProposals") ? `<button class="btn btn-outline btn-mini" type="button" data-proposal-reject-show="${proposal.id}">Reject</button>` : ""}
+          ${can("approveProposals") ? `<button class="btn btn-primary btn-mini" type="button" data-proposal-approve="${escapeHtml(proposal.id)}">Approve</button>` : ""}
+          ${can("approveProposals") ? `<button class="btn btn-outline btn-mini" type="button" data-proposal-reject-show="${escapeHtml(proposal.id)}">Reject</button>` : ""}
         </div>
       </li>
     `;

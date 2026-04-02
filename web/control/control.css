@@ -4085,3 +4085,8 @@ textarea:focus {
     flex: 1 1 160px;
   }
 }
+
+/* ============ ROLE-BASED VISIBILITY ============ */
+body:not(.role-superadmin) .superadmin-only {
+  display: none !important;
+}

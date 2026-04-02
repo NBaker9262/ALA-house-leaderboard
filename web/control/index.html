@@ -105,7 +105,7 @@
     <input id="reasonInput" type="hidden">
     <input id="reasonDetailInput" type="hidden">
     <input id="sessionInput" type="hidden">
-    <button id="requestPathBtn" type="hidden"></button>
+    <button id="requestPathBtn" hidden type="button"></button>
     <select id="reasonTemplateSelect" hidden></select>
     <select id="usedReasonSelect" hidden></select>
     <select id="categorySelect" hidden></select>
@@ -114,8 +114,8 @@
     <select id="eventModeSelect" hidden></select>
     <input id="seasonInput" type="hidden">
     <input id="customReasonInput" type="hidden">
-    <button id="useReasonTemplateBtn" type="hidden"></button>
-    <button id="applyUsedReasonBtn" type="hidden"></button>
+    <button id="useReasonTemplateBtn" hidden type="button"></button>
+    <button id="applyUsedReasonBtn" hidden type="button"></button>
     <input id="tagSearchInput" type="hidden">
     <div id="tagSuggestions" hidden></div>
     <div id="selectedTags" hidden></div>
@@ -223,49 +223,15 @@
     </div>
   </div>
 
-  <section class="place-awards advanced-section" id="placePanel" data-workspace-panel="scoring">
-    <details class="accordion-section">
-      <summary class="accordion-header">
-        <span>Award Place Points</span>
-        <span class="accordion-icon">▼</span>
-      </summary>
-      <div class="accordion-content">
-        <div class="place-awards-header">
-          <h3>Award Place Points</h3>
-          <span class="place-hint" id="placeHint"></span>
-        </div>
-
-        <div class="place-rows" id="placeRows"></div>
-        <div id="placePreview" class="place-preview"></div>
-
-        <div class="place-actions">
-          <button id="autoFillBtn" class="btn btn-muted" type="button" data-action-control>Auto Fill by Score</button>
-          <button id="clearPlacesBtn" class="btn btn-ghost" type="button" data-action-control>Clear</button>
-          <button id="applyPlacesBtn" class="btn btn-primary" type="button" data-action-control>Apply Place Awards</button>
-        </div>
-      </div>
-    </details>
-  </section>
-
-  <section class="meta advanced-section" data-workspace-panel="scoring">
-    <details class="accordion-section">
-      <summary class="accordion-header">
-        <span>Quick Actions & Settings</span>
-        <span class="accordion-icon">▼</span>
-      </summary>
-      <div class="accordion-content" style="display:flex;gap:10px;align-items:center">
-        <button id="undoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Undo Last Action" aria-label="Undo Last Action">
-          <span aria-hidden="true">↶</span>
-        </button>
-        <button id="redoBtn" class="btn btn-ghost quick-icon-btn" type="button" data-action-control title="Redo" aria-label="Redo" disabled>
-          <span aria-hidden="true">↷</span>
-        </button>
-        <button id="resetBtn" class="btn btn-danger quick-icon-btn" type="button" data-action-control title="Reset All Scores" aria-label="Reset All Scores">
-          <span aria-hidden="true">⟳</span>
-        </button>
-      </div>
-    </details>
-  </section>
+  <!-- Place awards removed; keep hidden stubs for JS compatibility -->
+  <span id="placeHint" hidden></span>
+  <div id="placeRows" hidden></div>
+  <div id="placePreview" hidden></div>
+  <button id="autoFillBtn" hidden type="button"></button>
+  <button id="clearPlacesBtn" hidden type="button"></button>
+  <button id="applyPlacesBtn" hidden type="button"></button>
+  <button id="undoBtn" hidden type="button"></button>
+  <button id="redoBtn" hidden type="button" disabled></button>
 
   <section class="activity-log advanced-section" data-workspace-panel="history">
     <details class="accordion-section">
@@ -274,7 +240,6 @@
         <span class="accordion-icon">▼</span>
       </summary>
       <div class="accordion-content">
-        <h4>Timeline Explorer</h4>
         <div id="historyStats" class="history-stats"></div>
 
         <div class="history-tools">
@@ -588,6 +553,16 @@
       </div>
       <p id="backupStatus" class="log-empty">Backups are only visible to superadmins.</p>
       <ul id="backupList"><li class="log-empty">No backups loaded yet.</li></ul>
+    </section>
+
+    <hr class="admin-divider superadmin-only">
+
+    <section class="admin-section superadmin-only" id="dangerZonePanel" hidden>
+      <h4 class="admin-section-title" style="color: var(--danger);">Danger Zone</h4>
+      <p class="admin-note">Irreversible actions. Proceed with caution.</p>
+      <div class="user-admin-actions">
+        <button id="resetBtn" class="btn btn-danger" type="button" data-action-control>Reset All Scores to Zero</button>
+      </div>
     </section>
   </aside>
   <div class="drawer-scrim" data-close-drawer="admin"></div>
