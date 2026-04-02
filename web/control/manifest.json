@@ -2,8 +2,8 @@
   "name": "House Points Control",
   "short_name": "House Points",
   "description": "House points management system for school events and competitions",
-  "start_url": "/web/control/",
-  "scope": "/web/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
@@ -27,7 +27,7 @@
       "name": "Quick Scoring",
       "short_name": "Score",
       "description": "Open the quick scoring interface",
-      "url": "/web/control/?tab=scoring",
+      "url": "./?tab=scoring",
       "icons": [
         {
           "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%231d9f5f' width='96' height='96'/><text x='48' y='65' font-size='40' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>+</text></svg>",
@@ -40,7 +40,7 @@
       "name": "Approvals",
       "short_name": "Review",
       "description": "Review pending proposals",
-      "url": "/web/control/?tab=queue",
+      "url": "./?tab=queue",
       "icons": [
         {
           "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%23406ac8' width='96' height='96'/><text x='48' y='65' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='system-ui'>✓</text></svg>",

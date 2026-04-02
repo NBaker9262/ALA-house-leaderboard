@@ -1,6 +1,6 @@
 # Complete Setup & Deployment Guide
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-02
 **Project:** ALA House Leaderboard - Points Tracking System
 
 ---
@@ -29,7 +29,12 @@ node scripts/admin/init-tags.mjs --apply
 
 # 3. Done! Start the app
 firebase serve
+# Open: http://localhost:5000/control/
 ```
+
+For VS Code Live Server in Codespaces, open:
+- `/control.html`
+- `/leaderboard.html`
 
 ---
 
@@ -133,7 +138,7 @@ Now the sync bot can edit your sheet ✓
 
 1. Open the JSON file you downloaded from GCP (from Step 4 above)
 2. Copy ALL the contents (the entire JSON)
-3. Go to GitHub: https://github.com/anthropics/ALA-house-leaderboard
+3. Go to your GitHub repository for this project
 4. Click **Settings** → **Secrets and variables** → **Actions**
 5. Click **New repository secret**
 6. Name: `GCP_CREDENTIALS_JSON`
@@ -213,7 +218,7 @@ Wait 30 seconds, then check:
 
 ### Part 1: Authentication
 
-- [ ] Open app: http://localhost:5000/web/control/
+- [ ] Open app: http://localhost:5000/control/
 - [ ] Click "Forgot Password?"
 - [ ] Enter admin email
 - [ ] Check email for Firebase reset link
@@ -278,7 +283,7 @@ Wait 30 seconds, then check:
 ### Help modal doesn't open
 
 **Fix:**
-1. Press `?` key (or click ? button in top right)
+1. Press `?` key (or click the `Help` floating button)
 2. Check browser console (F12) for JavaScript errors
 3. If stuck, close all drawers first
 
@@ -317,10 +322,10 @@ Wait 30 seconds, then check:
 ## Getting Help
 
 Check these files:
-1. `docs/IMPLEMENTATION_PROGRESS.md` - What's done
+1. `COMPREHENSIVE_IMPLEMENTATION_GUIDE.md` - Full implementation details
 2. `scripts/README.md` - Admin script details
 3. `PROJECT_ACTION_ITEMS.md` - Current to-do items
-4. GitHub Issues - Common problems
+4. `README.md` - Quick links and daily workflow
 
 ---
 
@@ -335,4 +340,4 @@ After first deployment:
 
 ---
 
-**Questions?** Check the troubleshooting section or see `docs/REFERENCE.md` for technical details.
+**Questions?** Check the troubleshooting section or `COMPREHENSIVE_IMPLEMENTATION_GUIDE.md` for technical details.

@@ -267,7 +267,8 @@ The tag system organizes house points into categories like "Sports", "Assemblies
    node scripts/admin/init-tags.mjs --apply
    ```
 
-This creates ~20 default tags. You can add more manually in the admin drawer once logged into the control panel.
+This creates ~20 default tags using the same auth model as other admin scripts (`GOOGLE_APPLICATION_CREDENTIALS` or Firebase CLI token fallback).
+You can add more manually in the admin drawer once logged into the control panel.
 
 ### Admin tag management
 

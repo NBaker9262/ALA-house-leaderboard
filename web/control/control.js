@@ -5,6 +5,8 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  addDoc,
+  updateDoc,
   collection,
   query,
   where,
@@ -14,6 +16,7 @@ import {
   runTransaction,
   onSnapshot,
   serverTimestamp,
+  increment,
   orderBy
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
@@ -37,7 +40,26 @@ const firebaseConfig = {
 
 const MODE_PARAM = new URLSearchParams(window.location.search).get("mode");
 const TEST_MODE = MODE_PARAM === "test";
+const HOSTNAME = String(window.location.hostname || "").toLowerCase();
+const IS_CODESPACES_TUNNEL = HOSTNAME.endsWith(".app.github.dev") || HOSTNAME.endsWith(".github.dev");
+const ENABLE_PWA = !TEST_MODE && !IS_CODESPACES_TUNNEL;
 const TEST_STORAGE_KEY = "ala.house.leaderboard.local.test.v2";
+
+if (ENABLE_PWA) {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const manifestLink = document.createElement("link");
+    manifestLink.rel = "manifest";
+    manifestLink.href = "manifest.json";
+    document.head.appendChild(manifestLink);
+  }
+} else {
+  document.querySelector('link[rel="manifest"]')?.remove();
+  if ("serviceWorker" in navigator) {
+    void navigator.serviceWorker.getRegistrations()
+      .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
+      .catch(() => undefined);
+  }
+}
 
 const houses = [
   { id: "red", name: "Red Panda House", bg: "#ea0125", text: "#ffffff" },
@@ -52,18 +74,30 @@ const PLACE_BADGES = ["1st", "2nd", "3rd", "4th"];
 const MAX_ACTIVITY_ENTRIES = 300;
 const MAX_ACTIVITY_PREVIEW = 14;
 const MAX_BACKUP_LIST = 40;
+const MAX_CONTACT_MESSAGES = 40;
 const REASON_TEMPLATE_BANK = [
-  "Attendance",
-  "Participation",
-  "Sportsmanship",
-  "Game Win",
-  "Second Place",
-  "Third Place",
-  "Fourth Place",
-  "Spirit Challenge",
-  "Scavenger Hunt",
-  "Dress Code",
-  "Announcement Bonus"
+  "attendance",
+  "participation",
+  "sportsmanship",
+  "game win",
+  "second place",
+  "third place",
+  "fourth place",
+  "spirit challenge",
+  "scavenger hunt",
+  "dress code",
+  "announcement bonus"
+];
+
+const QUICK_EVENT_TAGS = [
+  "announcements",
+  "assembly",
+  "basketball",
+  "volleyball",
+  "spirit week",
+  "prom",
+  "attendance",
+  "scavenger hunt"
 ];
 
 const DEFAULT_EVENT_CATALOG = {
@@ -140,11 +174,11 @@ const ROLE_DEFAULTS = {
     manageCatalog: false
   },
   helper: {
-    scoreEdit: false,
-    proposePoints: true,
-    placeAwards: true,
-    studentLookup: true,
-    historyAccess: true,
+    scoreEdit: true,
+    proposePoints: false,
+    placeAwards: false,
+    studentLookup: false,
+    historyAccess: false,
     restoreHistory: false,
     checkpoint: false,
     downloadBackup: false,
@@ -200,6 +234,8 @@ const dom = {
   recentReasons: document.getElementById("recentReasons"),
   reasonCommitBtn: document.getElementById("reasonCommitBtn"),
   reasonClearBtn: document.getElementById("reasonClearBtn"),
+  applyEventDraftBtn: document.getElementById("applyEventDraftBtn"),
+  endEventBtn: document.getElementById("endEventBtn"),
   reasonLockState: document.getElementById("contextStatus"),
   reasonTracker: document.getElementById("reasonTracker"),
   contextSummary: document.getElementById("contextSummary"),
@@ -216,10 +252,15 @@ const dom = {
   redoBtn: document.getElementById("redoBtn"),
   resetBtn: document.getElementById("resetBtn"),
   accountBtn: document.getElementById("profileMenuBtn"),
+  workspaceMenuBtn: document.getElementById("workspaceMenuBtn"),
+  workspaceSwitchBtn: document.getElementById("workspaceSwitchBtn"),
   adminBtn: document.getElementById("adminMenuBtn"),
+  workspaceLabel: document.getElementById("workspaceLabel"),
   helpBtn: document.getElementById("helpOpenBtn"),
   helpDialog: document.getElementById("helpDialog"),
   closeHelpBtn: document.getElementById("closeHelpBtn"),
+  workspaceDialog: document.getElementById("workspaceDialog"),
+  closeWorkspaceBtn: document.getElementById("closeWorkspaceBtn"),
   accountDialog: document.getElementById("accountDialog"),
   closeAccountBtn: document.getElementById("closeAccountBtn"),
   adminDialog: document.getElementById("adminDialog"),
@@ -271,12 +312,34 @@ const dom = {
   sheetSyncPanel: document.getElementById("sheetSyncPanel"),
   syncPointsBtn: document.getElementById("syncPointsBtn"),
   syncPointsStatus: document.getElementById("syncPointsStatus"),
+  contactInboxStatus: document.getElementById("contactInboxStatus"),
+  contactInboxList: document.getElementById("contactInboxList"),
+  refreshContactBtn: document.getElementById("refreshContactBtn"),
+  demoRoleCard: document.getElementById("demoRoleCard"),
+  demoRoleSelect: document.getElementById("demoRoleSelect"),
+  applyDemoRoleBtn: document.getElementById("applyDemoRoleBtn"),
+  clearDemoRoleBtn: document.getElementById("clearDemoRoleBtn"),
+  demoRoleStatus: document.getElementById("demoRoleStatus"),
+  demoRoleBanner: document.getElementById("demoRoleBanner"),
+  demoRoleBannerText: document.getElementById("demoRoleBannerText"),
+  exitDemoRoleBtn: document.getElementById("exitDemoRoleBtn"),
+  notificationsBtn: document.getElementById("notificationsBtn"),
+  notificationsBadge: document.getElementById("notificationsBadge"),
+  notificationsPanel: document.getElementById("notificationsPanel"),
+  notificationsList: document.getElementById("notificationsList"),
+  closeNotificationsBtn: document.getElementById("closeNotificationsBtn"),
+  clearNotificationsBtn: document.getElementById("clearNotificationsBtn"),
   backupManagerPanel: document.getElementById("backupManagerPanel"),
   backupLabelInput: document.getElementById("backupLabelInput"),
   createBackupBtn: document.getElementById("createBackupBtn"),
   refreshBackupsBtn: document.getElementById("refreshBackupsBtn"),
   backupStatus: document.getElementById("backupStatus"),
   backupList: document.getElementById("backupList"),
+  eventSearchInput: document.getElementById("eventSearchInput"),
+  quickEventTags: document.getElementById("quickEventTags"),
+  eventSuggestions: document.getElementById("eventSuggestions"),
+  eventSelectedDisplay: document.getElementById("eventSelectedDisplay"),
+  reasonStep: document.getElementById("reasonStep"),
   tagSearchInput: document.getElementById("tagSearchInput"),
   tagSuggestions: document.getElementById("tagSuggestions"),
   selectedTags: document.getElementById("selectedTags"),
@@ -296,10 +359,14 @@ let pendingWrites = 0;
 let currentScores = { red: 0, white: 0, blue: 0, silver: 0 };
 let eventCatalog = normalizeEventCatalog(DEFAULT_EVENT_CATALOG);
 let currentRole = "";
+let authenticatedRole = "";
+let demoRolePreview = "";
 let currentPermissions = { ...ROLE_DEFAULTS.staff };
 let currentUserEmail = "";
 let currentUserUid = "";
 let activeContext = null;
+let tagLibrary = null;
+let tagModalController = null;
 let auditEntries = [];
 let pendingProposals = [];
 let userProfiles = [];
@@ -316,8 +383,12 @@ let allEventTags = [];
 let selectedTags = [];
 let userRecentTags = [];
 let tagSearchTimer = null;
+let selectedEventTag = "";
 let localState = defaultLocalState();
 let lastHelpFocus = null;
+let eventDraftChanges = { red: 0, white: 0, blue: 0, silver: 0 };
+let eventDraftCount = 0;
+let notificationsFeed = [];
 
 // Offline support
 let isOnline = navigator.onLine;
@@ -330,7 +401,7 @@ window.addEventListener('online', handleOnline);
 window.addEventListener('offline', handleOffline);
 
 // Listen for service worker messages
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && ENABLE_PWA) {
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data.type === 'OFFLINE_STATUS_CHANGED') {
       isOnline = event.data.isOnline;
@@ -362,6 +433,8 @@ renderRecentReasonChips();
 renderReasonTracker();
 renderSimplifiedReasonCombo();
 renderSimplifiedCatalog();
+renderQuickEventTags();
+setSelectedEventTag("");
 attachSimplifiedFormListeners();
 updateQuickStats();
 updateContextSummary();
@@ -377,6 +450,7 @@ setSyncStatus(TEST_MODE ? "Local test mode is active" : "Connecting to live scor
 syncPermissionControlledUi();
 
 setupEventListeners();
+renderNotifications();
 bootAuth();
 
 function defaultLocalState() {
@@ -434,6 +508,57 @@ function roleDisplayLabel(role) {
   if (role === "admin") return "Admin";
   if (role === "helper") return "Helper";
   return "Staff";
+}
+
+function isDemoRoleActive() {
+  return Boolean(demoRolePreview && normalizeRole(demoRolePreview) !== normalizeRole(authenticatedRole));
+}
+
+function effectiveRole() {
+  if (isDemoRoleActive()) return normalizeRole(demoRolePreview);
+  return authenticatedRole ? normalizeRole(authenticatedRole) : "";
+}
+
+function updateDemoRoleUi() {
+  const canPreview = authenticatedRole === "superadmin";
+  if (dom.demoRoleCard) dom.demoRoleCard.hidden = !canPreview;
+  if (dom.demoRoleSelect) {
+    dom.demoRoleSelect.disabled = !canPreview;
+    dom.demoRoleSelect.value = isDemoRoleActive() ? normalizeRole(demoRolePreview) : "";
+  }
+  if (dom.applyDemoRoleBtn) dom.applyDemoRoleBtn.disabled = !canPreview;
+  if (dom.clearDemoRoleBtn) dom.clearDemoRoleBtn.disabled = !canPreview || !isDemoRoleActive();
+
+  if (dom.demoRoleStatus) {
+    if (!canPreview) {
+      dom.demoRoleStatus.textContent = "Only superadmin can use demo role preview.";
+    } else if (isDemoRoleActive()) {
+      dom.demoRoleStatus.textContent = `Previewing as ${roleDisplayLabel(effectiveRole())}.`;
+    } else {
+      dom.demoRoleStatus.textContent = "Preview mode is off.";
+    }
+  }
+
+  if (dom.demoRoleBanner) dom.demoRoleBanner.hidden = !isDemoRoleActive();
+  if (dom.demoRoleBannerText) {
+    dom.demoRoleBannerText.textContent = isDemoRoleActive()
+      ? `Previewing ${roleDisplayLabel(effectiveRole())}`
+      : "Preview mode";
+  }
+}
+
+function applyEffectiveRoleState() {
+  const role = effectiveRole();
+  currentRole = role;
+  currentPermissions = resolveRolePermissions(role || "staff");
+  applyRoleClass(role);
+  if (currentUserEmail) {
+    const label = role ? roleDisplayLabel(role) : "No Role";
+    dom.loggedInAs.textContent = `${currentUserEmail} (${label})`;
+  } else {
+    dom.loggedInAs.textContent = "-";
+  }
+  updateDemoRoleUi();
 }
 
 function houseById(houseId) {
@@ -497,16 +622,92 @@ function renderWorkspace() {
     tab.classList.toggle("is-active", key === activeWorkspace);
   });
 
+  if (dom.workspaceLabel) {
+    const label = activeWorkspace === "history"
+      ? "Timeline"
+      : activeWorkspace === "queue"
+        ? "Approvals"
+        : activeWorkspace === "activity"
+          ? "Recent"
+          : activeWorkspace === "support"
+            ? "Support"
+          : activeWorkspace === "analytics"
+            ? "Analytics"
+            : "Scoring";
+    dom.workspaceLabel.textContent = label;
+  }
+
   document.querySelectorAll("[data-workspace-panel]").forEach(panel => {
     const key = String(panel.getAttribute("data-workspace-panel") || "");
     const visible = key === activeWorkspace;
     panel.toggleAttribute("hidden", !visible);
     panel.classList.toggle("workspace-hidden", !visible);
   });
+
+  if (activeWorkspace === "support") {
+    void refreshContactInbox();
+  }
+}
+
+function openWorkspaceDialog() {
+  if (!dom.workspaceDialog) return;
+  closeHelpDialog({ restoreFocus: false });
+  closeAccountDialog();
+  closeAdminDialog();
+  document.body.classList.add("overlay-open");
+  dom.workspaceDialog.hidden = false;
+}
+
+function closeWorkspaceDialog() {
+  if (!dom.workspaceDialog) return;
+  dom.workspaceDialog.hidden = true;
+  clearOverlayClassIfNoDialogs();
+}
+
+function renderNotifications() {
+  if (!dom.notificationsList) return;
+  if (!notificationsFeed.length) {
+    dom.notificationsList.innerHTML = '<li class="log-empty">No notifications yet.</li>';
+  } else {
+    dom.notificationsList.innerHTML = notificationsFeed.map(item => `
+      <li class="notification-item notification-${escapeHtml(item.tone)}">
+        <div class="notification-message">${escapeHtml(item.message)}</div>
+        <div class="notification-meta">${new Date(item.createdAt).toLocaleTimeString()}</div>
+      </li>
+    `).join("");
+  }
+
+  const count = notificationsFeed.length;
+  if (dom.notificationsBadge) {
+    dom.notificationsBadge.hidden = count === 0;
+    dom.notificationsBadge.textContent = String(Math.min(count, 99));
+  }
+}
+
+function pushNotification(message, tone = "info") {
+  notificationsFeed.unshift({
+    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    message: String(message || "").trim(),
+    tone,
+    createdAt: Date.now()
+  });
+  notificationsFeed = notificationsFeed.slice(0, 60);
+  renderNotifications();
+}
+
+function openNotificationsPanel() {
+  if (!dom.notificationsPanel) return;
+  dom.notificationsPanel.hidden = false;
+}
+
+function closeNotificationsPanel() {
+  if (!dom.notificationsPanel) return;
+  dom.notificationsPanel.hidden = true;
 }
 
 function showToast(message, tone = "success") {
   if (!dom.toastContainer) return;
+  pushNotification(message, tone);
   const toast = document.createElement("div");
   toast.className = `toast toast-${tone}`;
   toast.textContent = message;
@@ -874,6 +1075,36 @@ function getSubeventById(event, subeventId) {
 }
 
 function selectedRoute() {
+  if (selectedEventTag) {
+    const normalizedEvent = String(selectedEventTag || "").trim().toLowerCase();
+    return {
+      categoryId: "events",
+      categoryName: "Events",
+      eventId: safeId(normalizedEvent) || "general_event",
+      eventName: normalizedEvent,
+      subeventId: "general",
+      subeventName: "general"
+    };
+  }
+
+  const classification = String(document.getElementById("classificationSelect")?.value || "").trim();
+  if (classification.includes("|")) {
+    const [categoryId, eventId, subeventId] = classification.split("|");
+    const category = getCategoryById(categoryId);
+    const event = getEventById(category, eventId);
+    const subevent = getSubeventById(event, subeventId);
+    if (category && event && subevent) {
+      return {
+        categoryId: category.id,
+        categoryName: category.name,
+        eventId: event.id,
+        eventName: event.name,
+        subeventId: subevent.id,
+        subeventName: subevent.name
+      };
+    }
+  }
+
   if (!dom.categorySelect || !dom.eventSelect || !dom.subeventSelect) return null;
   const category = getCategoryById(dom.categorySelect.value);
   const event = getEventById(category, dom.eventSelect.value);
@@ -890,16 +1121,19 @@ function selectedRoute() {
 }
 
 function buildContextFromInputs() {
-  if (!dom.reasonInput || !dom.notesInput || !dom.eventModeSelect || !dom.seasonInput || !dom.sessionInput) return null;
+  if (!dom.notesInput || !dom.eventModeSelect || !dom.seasonInput || !dom.sessionInput) return null;
   const route = selectedRoute();
   if (!route) return null;
-  const reason = String(dom.reasonInput.value || "").trim();
+  const simplifiedReason = String(document.getElementById("reasonComboInput")?.value || "").trim();
+  const legacyReason = String(dom.reasonInput?.value || "").trim();
+  const reason = simplifiedReason || legacyReason;
   const notes = String(dom.notesInput.value || "").trim();
   const eventMode = dom.eventModeSelect.value === "session" ? "session" : "recurring";
   const season = String(dom.seasonInput.value || "").trim().slice(0, 30);
   const sessionName = String(dom.sessionInput.value || "").trim().slice(0, 40);
   if (!reason) return null;
   if (eventMode === "session" && !sessionName) return null;
+  if (dom.reasonInput) dom.reasonInput.value = reason;
   return {
     ...route,
     eventMode,
@@ -914,6 +1148,12 @@ function buildContextFromInputs() {
 function updateContextSummary() {
   if (!dom.contextSummary || !dom.reasonLockState) return;
   if (!activeContext) {
+    if (selectedEventTag) {
+      dom.contextSummary.textContent = `Event selected: ${selectedEventTag}. Add a reason and start event.`;
+      dom.reasonLockState.textContent = "Ready";
+      dom.reasonLockState.className = "status-chip status-queued";
+      return;
+    }
     dom.contextSummary.textContent = "No active event context.";
     dom.reasonLockState.textContent = "Locked";
     dom.reasonLockState.className = "status-chip status-failed";
@@ -921,95 +1161,548 @@ function updateContextSummary() {
   }
   const modeLabel = activeContext.eventMode === "session" ? `Session: ${activeContext.sessionName}` : "Recurring";
   const seasonLabel = activeContext.season ? ` • ${activeContext.season}` : "";
-  dom.contextSummary.textContent = `${activeContext.pathLabel} • ${modeLabel}${seasonLabel} • ${activeContext.reason}`;
+  const pendingLabel = hasEventDraftChanges() ? ` • Pending: ${eventDraftCount} change${eventDraftCount === 1 ? "" : "s"}` : "";
+  dom.contextSummary.textContent = `${activeContext.pathLabel} • ${modeLabel}${seasonLabel} • ${activeContext.reason}${pendingLabel}`;
   dom.reasonLockState.textContent = "Active";
   dom.reasonLockState.className = "status-chip status-sent";
 }
 
 function updateQuickStats() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayMs = today.getTime();
-
-  const todayEntries = auditEntries.filter(e => {
-    const entryDate = new Date(Number(e.createdAtMs || 0));
-    entryDate.setHours(0, 0, 0, 0);
-    return entryDate.getTime() === todayMs && e.status === "applied";
-  });
-
-  const todayPoints = todayEntries.reduce((sum, e) => {
-    const c = e.changes || {};
-    return sum + (c.red || 0) + (c.white || 0) + (c.blue || 0) + (c.silver || 0);
-  }, 0);
-
-  const currentScores = { red: 0, white: 0, blue: 0, silver: 0 };
-  houses.forEach(h => {
-    currentScores[h.id] = Number(currentScores[h.id] || 0);
-  });
-
-  let leader = "–";
-  let maxScore = -Infinity;
-  houses.forEach(house => {
-    const score = Number(currentScores[house.id] || 0);
-    if (score > maxScore) {
-      maxScore = score;
-      leader = house.name.split(" ")[0];
-    }
-  });
-
-  let trend = "–";
-  const weekAgo = todayMs - (7 * 24 * 60 * 60 * 1000);
-  const weekEntries = auditEntries.filter(e => Number(e.createdAtMs || 0) >= weekAgo && e.status === "applied");
-  if (weekEntries.length > 0 && todayEntries.length > 0) {
-    const avgPerDay = weekEntries.length / 7;
-    const todayCount = todayEntries.length;
-    if (todayCount > avgPerDay * 1.1) trend = "↑";
-    else if (todayCount < avgPerDay * 0.9) trend = "↓";
-    else trend = "→";
-  }
-
-  const activeHouses = new Set();
-  auditEntries.forEach(e => {
-    const c = e.changes || {};
-    if (c.red) activeHouses.add("Red");
-    if (c.white) activeHouses.add("White");
-    if (c.blue) activeHouses.add("Blue");
-    if (c.silver) activeHouses.add("Silver");
-  });
-
-  if (dom.todayPointsCount) dom.todayPointsCount.textContent = String(todayPoints);
-  if (dom.currentLeaderName) dom.currentLeaderName.textContent = leader;
-  if (dom.weekTrendIndicator) dom.weekTrendIndicator.textContent = trend;
-  if (dom.activeHousesCount) dom.activeHousesCount.textContent = String(activeHouses.size);
+  renderQuickStats();
 }
 
+// ============ TAG LIBRARY ============
+
+class TagLibrary {
+  constructor() {
+    this.tags = [];
+    this.index = {}; // normalized name → tag object
+    this.byCategory = {}; // category path → tags array
+    this.lastSync = null;
+  }
+
+  async load() {
+    try {
+      console.log("📚 Loading tag library from Firestore...");
+      const querySnap = await getDocs(query(collection(db, "eventTags"), where("approved", "==", true)));
+      this.tags = querySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Build index and category grouping
+      this.index = {};
+      this.byCategory = {};
+      this.tags.forEach(tag => {
+        const norm = String(tag.normalizedName || "").toLowerCase();
+        this.index[norm] = tag;
+        const cat = tag.categoryPath || "Other";
+        if (!this.byCategory[cat]) this.byCategory[cat] = [];
+        this.byCategory[cat].push(tag);
+      });
+
+      // Sort by usage count within each category
+      Object.values(this.byCategory).forEach(arr => {
+        arr.sort((a, b) => (b.usage?.count || 0) - (a.usage?.count || 0));
+      });
+
+      this.lastSync = Date.now();
+      console.log(`✅ Loaded ${this.tags.length} tags into library`);
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to load tag library:", error);
+      return false;
+    }
+  }
+
+  search(query) {
+    if (!query || query.trim().length === 0) {
+      // Return top tags by category if no query
+      return this.getTopTags();
+    }
+
+    const results = [];
+    const queryLower = query.toLowerCase().trim();
+
+    // Use fuzzyMatchScore from tag-utils.js if available
+    this.tags.forEach(tag => {
+      const score = typeof fuzzyMatchScore === "function" ?
+        fuzzyMatchScore(tag.normalizedName, queryLower) :
+        (tag.name.toLowerCase().includes(queryLower) ? 100 : 0);
+
+      if (score > 30) {
+        results.push({ ...tag, _score: score });
+      }
+    });
+
+    // Sort by score, then by usage
+    results.sort((a, b) => {
+      const scoreDiff = b._score - a._score;
+      if (Math.abs(scoreDiff) > 10) return scoreDiff;
+      return (b.usage?.count || 0) - (a.usage?.count || 0);
+    });
+
+    return results.slice(0, 20); // Return top 20 matches
+  }
+
+  getTopTags() {
+    const results = [];
+    Object.values(this.byCategory).forEach(tags => {
+      results.push(...tags.slice(0, 3)); // Top 3 per category
+    });
+    return results.slice(0, 20);
+  }
+
+  getGroupedTags(searchQuery) {
+    const results = this.search(searchQuery);
+    const grouped = {};
+
+    results.forEach(tag => {
+      const cat = tag.categoryPath || "Other";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(tag);
+    });
+
+    return grouped;
+  }
+
+  async recordUsage(tagId, houseId) {
+    try {
+      const tagRef = doc(db, "eventTags", tagId);
+      await updateDoc(tagRef, {
+        "usage.count": increment(1),
+        "usage.lastUsed": serverTimestamp(),
+        [`usage.byHouse.${houseId}`]: increment(1),
+      });
+    } catch (error) {
+      console.warn("Could not record tag usage:", error);
+    }
+  }
+
+  async proposeCustomTag(name, category = "Custom") {
+    try {
+      const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      // Check for similar existing tags
+      const similar = this.tags.filter(t => {
+        const score = typeof fuzzyMatchScore === "function" ?
+          fuzzyMatchScore(t.normalizedName, normalized) : 0;
+        return score > 85;
+      });
+
+      const docRef = await addDoc(collection(db, "eventTagProposals"), {
+        tagName: name,
+        normalizedName: normalized,
+        category,
+        proposedBy: currentUserEmail || "anonymous",
+        proposedAt: serverTimestamp(),
+        status: "auto-approved", // Based on user decision: auto-approve for now
+        similarTags: similar.map(t => t.id),
+        usageCount: 0,
+      });
+
+      console.log("✅ Custom tag proposal created:", docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error("❌ Failed to propose custom tag:", error);
+      return null;
+    }
+  }
+}
+
+// ============ TAG MODAL CONTROLLER ============
+
+class TagModalController {
+  constructor(tagLibrary) {
+    this.tagLibrary = tagLibrary;
+    this.selectedHouseId = null;
+    this.selectedTags = [];
+    this.selectedAmount = 0;
+    this.selectedNotes = "";
+    this.modal = document.getElementById("tagModalOverlay");
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    if (!this.modal) return;
+
+    const closeBtn = document.getElementById("closeTagModalBtn");
+    const cancelBtn = document.getElementById("cancelTagModalBtn");
+    const applyBtn = document.getElementById("applyTagsBtn");
+    const searchField = document.getElementById("tagSearchField");
+    const customAmountInput = document.getElementById("modalCustomAmount");
+    const notesInput = document.getElementById("modalNotesInput");
+    const amountButtons = document.querySelectorAll(".btn-amount-modal");
+
+    closeBtn?.addEventListener("click", () => this.close());
+    cancelBtn?.addEventListener("click", () => this.close());
+    applyBtn?.addEventListener("click", () => this.apply());
+
+    // Search with debounce
+    let searchTimer = null;
+    searchField?.addEventListener("input", (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        this.renderTags(e.target.value);
+      }, 150);
+    });
+
+    // Amount buttons
+    amountButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-amount-modal").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        this.selectedAmount = Number(btn.dataset.amount || 0);
+        customAmountInput.value = "";
+      });
+    });
+
+    // Custom amount input
+    customAmountInput?.addEventListener("input", (e) => {
+      document.querySelectorAll(".btn-amount-modal").forEach(b => b.classList.remove("selected"));
+      this.selectedAmount = Number(e.target.value || 0);
+    });
+
+    // Notes input
+    notesInput?.addEventListener("input", (e) => {
+      this.selectedNotes = String(e.target.value || "").trim();
+    });
+
+    // Modal backdrop click to close
+    const scrim = this.modal.querySelector(".tag-modal-scrim");
+    scrim?.addEventListener("click", () => this.close());
+  }
+
+  async open(houseId) {
+    this.selectedHouseId = houseId;
+    this.selectedTags = [];
+    this.selectedAmount = 0;
+    this.selectedNotes = "";
+
+    // Update house name
+    const house = houses.find(h => h.id === houseId);
+    const houseName = document.getElementById("tagModalHouseName");
+    if (houseName && house) houseName.textContent = house.name;
+
+    // Reset form
+    const searchField = document.getElementById("tagSearchField");
+    const customAmount = document.getElementById("modalCustomAmount");
+    const notesInput = document.getElementById("modalNotesInput");
+    const saveCheckbox = document.getElementById("saveCustomTagCheckbox");
+
+    if (searchField) searchField.value = "";
+    if (customAmount) customAmount.value = "";
+    if (notesInput) notesInput.value = "";
+    if (saveCheckbox) saveCheckbox.checked = false;
+
+    document.querySelectorAll(".btn-amount-modal").forEach(b => b.classList.remove("selected"));
+    this.renderSelectedChips();
+
+    // Render initial tags
+    this.renderTags("");
+
+    // Focus search field
+    setTimeout(() => searchField?.focus(), 150);
+
+    // Show modal
+    if (this.modal) this.modal.hidden = false;
+  }
+
+  close() {
+    if (this.modal) this.modal.hidden = true;
+    this.selectedTags = [];
+    this.selectedAmount = 0;
+  }
+
+  renderTags(searchQuery) {
+    const grouped = this.tagLibrary.getGroupedTags(searchQuery);
+    const container = document.getElementById("tagCategoryGroups");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    Object.entries(grouped).sort().forEach(([category, tags]) => {
+      const groupDiv = document.createElement("div");
+      groupDiv.className = "tag-category-group";
+
+      const label = document.createElement("div");
+      label.className = "tag-category-label";
+      label.textContent = category;
+      groupDiv.appendChild(label);
+
+      const rowDiv = document.createElement("div");
+      rowDiv.className = "tag-options-row";
+
+      tags.forEach(tag => {
+        const btn = document.createElement("button");
+        btn.className = `tag-option ${this.selectedTags.includes(tag.id) ? "selected" : ""}`;
+        btn.type = "button";
+        btn.textContent = tag.name;
+        btn.dataset.tagId = tag.id;
+
+        btn.addEventListener("click", () => this.toggleTag(tag.id, tag.name));
+        rowDiv.appendChild(btn);
+      });
+
+      groupDiv.appendChild(rowDiv);
+      container.appendChild(groupDiv);
+    });
+  }
+
+  toggleTag(tagId, tagName) {
+    if (this.selectedTags.includes(tagId)) {
+      this.selectedTags = this.selectedTags.filter(id => id !== tagId);
+    } else {
+      this.selectedTags.push(tagId);
+    }
+
+    // Update UI
+    const buttons = document.querySelectorAll(`[data-tag-id]`);
+    buttons.forEach(btn => {
+      if (btn.dataset.tagId === tagId) {
+        btn.classList.toggle("selected");
+      }
+    });
+
+    this.renderSelectedChips();
+  }
+
+  renderSelectedChips() {
+    const container = document.getElementById("selectedTagsChips");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (this.selectedTags.length === 0) {
+      container.innerHTML = '<span style="font-size: 12px; color: var(--muted);">No tags selected</span>';
+      return;
+    }
+
+    this.selectedTags.forEach(tagId => {
+      const tag = this.tagLibrary.tags.find(t => t.id === tagId);
+      if (!tag) return;
+
+      const chip = document.createElement("div");
+      chip.className = "tag-chip";
+
+      const text = document.createElement("span");
+      text.className = "tag-chip-text";
+      text.textContent = tag.name;
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "tag-chip-remove";
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => this.toggleTag(tagId));
+
+      chip.appendChild(text);
+      chip.appendChild(removeBtn);
+      container.appendChild(chip);
+    });
+  }
+
+  async apply() {
+    if (!this.selectedHouseId) {
+      showToast("No house selected", "warn");
+      return;
+    }
+
+    if (this.selectedTags.length === 0) {
+      showToast("Select at least one tag", "warn");
+      return;
+    }
+
+    if (this.selectedAmount <= 0) {
+      showToast("Enter an amount greater than 0", "warn");
+      return;
+    }
+
+    try {
+      updateBusyState(1);
+
+      // Record usage for selected tags
+      this.selectedTags.forEach(tagId => {
+        void this.tagLibrary.recordUsage(tagId, this.selectedHouseId);
+      });
+
+      // Submit the scoring action
+      await submitScoringActionWithTags({
+        house: this.selectedHouseId,
+        amount: this.selectedAmount,
+        tags: this.selectedTags,
+        notes: this.selectedNotes,
+      });
+
+      showToast("✅ Points scored!", "success");
+      this.close();
+    } catch (error) {
+      console.error("Failed to apply tags:", error);
+      showToast("Failed to score points: " + error.message, "warn");
+    } finally {
+      updateBusyState(-1);
+    }
+  }
+}
+
+// ============ EMAIL CONTACT FORM HANDLERS ============
+
+function getCurrentUserDisplayName() {
+  const profile = userProfiles.find(p => p.email === currentUserEmail) || null;
+  const authName = auth.currentUser?.displayName || "";
+  const displayName = String(profile?.name || authName || "").trim();
+  if (displayName && currentUserEmail) return `${displayName} (${currentUserEmail})`;
+  if (currentUserEmail) return currentUserEmail;
+  return "Not signed in";
+}
+
+function openEmailContactForm() {
+  const modal = document.getElementById("emailContactFormModal");
+  const purposeSelect = document.getElementById("emailContactPurpose");
+  const identity = document.getElementById("emailContactIdentity");
+  const subjectInput = document.getElementById("emailContactSubject");
+  const messageInput = document.getElementById("emailContactMessage");
+  const statusDiv = document.getElementById("emailFormStatus");
+
+  if (purposeSelect) purposeSelect.value = "help";
+  if (identity) identity.textContent = getCurrentUserDisplayName();
+  if (subjectInput) subjectInput.value = "";
+  if (messageInput) messageInput.value = "";
+  if (statusDiv) statusDiv.textContent = "";
+
+  if (modal) modal.hidden = false;
+}
+
+function closeEmailContactForm() {
+  const modal = document.getElementById("emailContactFormModal");
+  if (modal) modal.hidden = true;
+}
+
+async function sendEmailContactForm() {
+  const purpose = String(document.getElementById("emailContactPurpose")?.value || "help");
+  const subject = String(document.getElementById("emailContactSubject")?.value || "").trim();
+  const message = String(document.getElementById("emailContactMessage")?.value || "").trim();
+  const statusDiv = document.getElementById("emailFormStatus");
+
+  if (!currentUserEmail) {
+    if (statusDiv) {
+      statusDiv.className = "email-form-status error";
+      statusDiv.textContent = "Please sign in before sending a message.";
+    }
+    return;
+  }
+
+  if (!subject || !message) {
+    if (statusDiv) {
+      statusDiv.className = "email-form-status error";
+      statusDiv.textContent = "Please fill in all fields";
+    }
+    return;
+  }
+
+  try {
+    updateBusyState(1);
+
+    // Store contact message in Firestore for admin review
+    const identity = getCurrentUserDisplayName();
+    await addDoc(collection(db, "contactMessages"), {
+      name: identity,
+      email: currentUserEmail,
+      purpose,
+      subject,
+      message,
+      userId: currentUserUid || "anonymous",
+      userEmail: currentUserEmail,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+
+    if (statusDiv) {
+      statusDiv.className = "email-form-status success";
+      statusDiv.textContent = "✅ Message sent! We'll get back to you soon.";
+    }
+
+    showToast("Message sent to Noah Baker", "success");
+
+    // Close after a short delay
+    setTimeout(() => {
+      closeEmailContactForm();
+    }, 2000);
+  } catch (error) {
+    console.error("Failed to send contact message:", error);
+    const permissionDenied = String(error?.code || "").includes("permission");
+    if (statusDiv) {
+      statusDiv.className = "email-form-status error";
+      statusDiv.textContent = permissionDenied
+        ? "Permission denied by Firestore rules. Deploy the updated rules, then retry."
+        : `Failed: ${error.message}`;
+    }
+    showToast("Failed to send message", "warn");
+  } finally {
+    updateBusyState(-1);
+  }
+}
+
+// ============ REASON TRACKER ============
+
 function renderReasonTracker() {
-  if (!dom.reasonTracker) return;
-  const totalByHouse = { red: 0, white: 0, blue: 0, silver: 0 };
-  const sinceMs = Date.now() - (2 * 60 * 60 * 1000);
-  const relevant = auditEntries.filter(entry => {
-    if (!activeContext) return false;
-    if (!entry?.context) return false;
-    if (entry.context.categoryId !== activeContext.categoryId) return false;
-    if (entry.context.eventId !== activeContext.eventId) return false;
-    if (entry.context.subeventId !== activeContext.subeventId) return false;
-    return Number(entry.createdAtMs || 0) >= sinceMs;
-  });
-
-  relevant.forEach(entry => {
-    const changes = entry.changes || {};
-    totalByHouse.red += Number(changes.red || 0);
-    totalByHouse.white += Number(changes.white || 0);
-    totalByHouse.blue += Number(changes.blue || 0);
-    totalByHouse.silver += Number(changes.silver || 0);
-  });
-
+  const total = Number(eventDraftChanges.red || 0) + Number(eventDraftChanges.white || 0) + Number(eventDraftChanges.blue || 0) + Number(eventDraftChanges.silver || 0);
   dom.reasonTracker.innerHTML = houses.map(house => {
-    const value = Number(totalByHouse[house.id] || 0);
+    const value = Number(eventDraftChanges[house.id] || 0);
     const polarityClass = value > 0 ? "delta-pos" : (value < 0 ? "delta-neg" : "");
     const signed = `${value > 0 ? "+" : ""}${value}`;
     return `<span class="history-delta-chip ${polarityClass}">${house.id[0].toUpperCase()} ${signed}</span>`;
-  }).join("");
+  }).join("") + `<span class="history-delta-chip ${total > 0 ? "delta-pos" : total < 0 ? "delta-neg" : ""}">Total ${total > 0 ? "+" : ""}${total}</span>`;
+}
+
+function hasEventDraftChanges() {
+  return houses.some(house => Number(eventDraftChanges[house.id] || 0) !== 0);
+}
+
+function resetEventDraft() {
+  eventDraftChanges = { red: 0, white: 0, blue: 0, silver: 0 };
+  eventDraftCount = 0;
+  updateContextSummary();
+  renderReasonTracker();
+  renderHouseCards();
+  syncPermissionControlledUi();
+}
+
+async function applyEventDraftChanges({ endAfterApply = false } = {}) {
+  if (!activeContext) {
+    showToast("Start an event first.", "warn");
+    return;
+  }
+  if (!hasEventDraftChanges()) {
+    if (endAfterApply) {
+      clearContext({ quiet: true });
+      showToast("Event ended with no pending changes.", "info");
+      return;
+    }
+    showToast("No pending changes to apply.", "warn");
+    return;
+  }
+
+  const changes = { ...eventDraftChanges };
+  const total = Number(changes.red || 0) + Number(changes.white || 0) + Number(changes.blue || 0) + Number(changes.silver || 0);
+  const summary = `${activeContext.reason} · event batch (${eventDraftCount} changes, total ${total > 0 ? "+" : ""}${total})`;
+
+  await submitScoringAction({ type: "delta", summary, changes });
+  resetEventDraft();
+  if (endAfterApply) {
+    clearContext({ quiet: true });
+    showToast("Event ended and saved.", "success");
+  }
+}
+
+function queueHouseDeltaInDraft(house, delta) {
+  if (!activeContext) {
+    showToast("Start an event first.", "warn");
+    return;
+  }
+  if (!Number.isFinite(delta) || delta === 0) return;
+  eventDraftChanges[house] = Number(eventDraftChanges[house] || 0) + delta;
+  eventDraftCount += 1;
+  updateContextSummary();
+  renderReasonTracker();
+  renderHouseCards();
+  syncPermissionControlledUi();
 }
 
 function renderCatalogSelects() {
@@ -1075,7 +1768,7 @@ function reasonTemplateSuggestions(route) {
   const eventWords = [route.eventName, route.subeventName]
     .map(item => String(item || "").trim())
     .filter(Boolean);
-  const dynamic = eventWords.map(word => `${word} Participation`);
+  const dynamic = eventWords.map(word => `${String(word).toLowerCase()} participation`);
   return [...REASON_TEMPLATE_BANK, ...dynamic];
 }
 
@@ -1281,6 +1974,7 @@ function renderPermissionGrid() {
 function renderHouseCards() {
   dom.housesContainer.innerHTML = "";
   houses.forEach(house => {
+    const pending = Number(eventDraftChanges[house.id] || 0);
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.house = house.id;
@@ -1291,10 +1985,20 @@ function renderHouseCards() {
       </header>
       <div class="score-row">
         <div class="points" id="pts-${house.id}">0</div>
+        <div class="pending-wrap">
+          <span class="pending-label">Pending</span>
+          <span class="pending-value ${pending > 0 ? "delta-pos" : pending < 0 ? "delta-neg" : ""}" id="pending-${house.id}">${pending > 0 ? "+" : ""}${pending}</span>
+        </div>
+      </div>
+      <div class="score-row">
         <label class="custom-field" for="custom-${house.id}">
           <span>Custom Amount</span>
           <input id="custom-${house.id}" type="number" min="1" inputmode="numeric" placeholder="Amount" data-action-control>
         </label>
+        <div class="custom-actions">
+          <button class="btn btn-primary btn-mini" type="button" data-role="custom-add" data-house="${house.id}" data-action-control>Add</button>
+          <button class="btn btn-outline btn-mini" type="button" data-role="custom-subtract" data-house="${house.id}" data-action-control>Subtract</button>
+        </div>
       </div>
       <div class="quick-groups">
         <section class="quick-group">
@@ -1305,10 +2009,6 @@ function renderHouseCards() {
           <p class="quick-title">SUBTRACT</p>
           <div class="quick-buttons" id="sub-${house.id}"></div>
         </section>
-      </div>
-      <div class="custom-actions">
-        <button class="btn btn-primary" type="button" data-action-control data-role="custom-add">${can("scoreEdit") ? "Add Custom" : "Suggest Custom"}</button>
-        <button class="btn btn-outline" type="button" data-action-control data-role="custom-subtract">${can("scoreEdit") ? "Subtract Custom" : "Suggest Subtract"}</button>
       </div>
     `;
 
@@ -1325,29 +2025,20 @@ function renderHouseCards() {
       const deltaButton = target.closest("button[data-delta]");
       if (deltaButton) {
         const delta = Number(deltaButton.dataset.delta || "0");
-        void submitHouseDelta(house.id, delta);
+        queueHouseDeltaInDraft(house.id, delta);
         return;
       }
-      const roleButton = target.closest("button[data-role]");
-      if (roleButton) {
-        if (roleButton.dataset.role === "custom-add") {
-          void submitCustomDelta(house.id, 1);
-        }
-        if (roleButton.dataset.role === "custom-subtract") {
-          void submitCustomDelta(house.id, -1);
-        }
-        return;
-      }
-      if (simplifiedScoreAmount > 0) {
-        void submitHouseDelta(house.id, simplifiedScoreAmount);
+      const customBtn = target.closest("button[data-role]");
+      if (customBtn) {
+        const role = String(customBtn.dataset.role || "");
+        const direction = role === "custom-subtract" ? -1 : 1;
+        void submitCustomDelta(house.id, direction);
       }
     });
 
     dom.housesContainer.appendChild(card);
   });
 }
-
-let simplifiedScoreAmount = 0;
 
 function renderSimplifiedReasonCombo() {
   const input = document.getElementById("reasonComboInput");
@@ -1367,6 +2058,7 @@ function renderSimplifiedCatalog() {
   const select = document.getElementById("classificationSelect");
   if (!select || !eventCatalog) return;
 
+  const previous = String(select.value || "");
   select.innerHTML = '<option value="">Select event...</option>';
 
   eventCatalog.categories.forEach(category => {
@@ -1379,6 +2071,181 @@ function renderSimplifiedCatalog() {
       });
     });
   });
+
+  if (previous && Array.from(select.options).some(option => option.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function collectEventCandidates(queryText = "") {
+  const query = String(queryText || "").trim().toLowerCase();
+  const candidates = [];
+
+  QUICK_EVENT_TAGS.forEach(tag => {
+    candidates.push({ label: tag.toLowerCase(), source: "quick" });
+  });
+
+  allEventTags.forEach(tag => {
+    const name = String(tag?.name || "").trim().toLowerCase();
+    if (!name) return;
+    candidates.push({ label: name, source: "firestore" });
+  });
+
+  eventCatalog?.categories?.forEach(category => {
+    category.events.forEach(event => {
+      const eventName = String(event.name || "").trim().toLowerCase();
+      if (eventName) candidates.push({ label: eventName, source: "catalog" });
+      event.subevents.forEach(subevent => {
+        const subName = String(subevent.name || "").trim().toLowerCase();
+        if (subName) candidates.push({ label: subName, source: "catalog" });
+      });
+    });
+  });
+
+  auditEntries.forEach(entry => {
+    const eventName = String(entry?.context?.eventName || "").trim().toLowerCase();
+    if (eventName) candidates.push({ label: eventName, source: "history" });
+  });
+
+  const seen = new Set();
+  const deduped = candidates.filter(candidate => {
+    const key = normalizeTag(candidate.label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (!query) return deduped.slice(0, 18);
+
+  return deduped
+    .map(candidate => {
+      const lower = candidate.label;
+      const contains = lower.includes(query) ? 1 : 0;
+      const starts = lower.startsWith(query) ? 1 : 0;
+      const similarity = calculateTagSimilarity(query, lower);
+      const score = (starts * 2) + contains + similarity;
+      return { ...candidate, score };
+    })
+    .filter(candidate => candidate.score >= 0.45)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+}
+
+function canonicalizeEventTag(rawValue) {
+  const normalizedInput = String(rawValue || "").trim().toLowerCase();
+  if (!normalizedInput) return "";
+  const candidates = collectEventCandidates(normalizedInput);
+  if (!candidates.length) return normalizedInput;
+
+  const best = candidates
+    .map(candidate => ({
+      label: candidate.label,
+      similarity: calculateTagSimilarity(normalizedInput, candidate.label),
+      contains: candidate.label.includes(normalizedInput) || normalizedInput.includes(candidate.label)
+    }))
+    .sort((a, b) => b.similarity - a.similarity)[0];
+
+  if (best && (best.similarity >= 0.62 || best.contains)) {
+    return best.label.toLowerCase();
+  }
+  return normalizedInput;
+}
+
+function setSelectedEventTag(rawValue) {
+  const canonical = canonicalizeEventTag(rawValue);
+  selectedEventTag = canonical;
+
+  if (dom.eventSelectedDisplay) {
+    if (canonical) {
+      dom.eventSelectedDisplay.hidden = false;
+      dom.eventSelectedDisplay.innerHTML = `
+        <span class="event-selected-label">event</span>
+        <strong>${escapeHtml(canonical)}</strong>
+        <button id="clearEventTagBtn" class="btn btn-ghost btn-mini" type="button">Clear</button>
+      `;
+      dom.eventSelectedDisplay.querySelector("#clearEventTagBtn")?.addEventListener("click", () => {
+        setSelectedEventTag("");
+      });
+    } else {
+      dom.eventSelectedDisplay.hidden = true;
+      dom.eventSelectedDisplay.innerHTML = "";
+    }
+  }
+
+  if (dom.reasonStep) dom.reasonStep.hidden = !canonical;
+  if (dom.eventSearchInput && canonical) dom.eventSearchInput.value = canonical;
+  if (dom.eventSuggestions) dom.eventSuggestions.innerHTML = "";
+
+  if (canonical && dom.classificationSelect) {
+    const options = Array.from(dom.classificationSelect.options).filter(option => option.value);
+    const bestOption = options
+      .map(option => ({
+        value: option.value,
+        text: String(option.textContent || "").toLowerCase(),
+        score: calculateTagSimilarity(canonical, String(option.textContent || "").toLowerCase())
+      }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (bestOption && bestOption.score >= 0.35) {
+      dom.classificationSelect.value = bestOption.value;
+    }
+  }
+
+  if (!canonical) {
+    activeContext = null;
+    renderReasonTracker();
+  }
+  renderRecentReasonChips();
+  renderSimplifiedReasonCombo();
+  updateContextSummary();
+  syncPermissionControlledUi();
+}
+
+function renderQuickEventTags() {
+  if (!dom.quickEventTags) return;
+  dom.quickEventTags.innerHTML = QUICK_EVENT_TAGS.map(tag => (
+    `<button class="reason-pill-btn" type="button" data-event-quick="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`
+  )).join("");
+
+  dom.quickEventTags.querySelectorAll("button[data-event-quick]").forEach(button => {
+    button.addEventListener("click", () => {
+      const tag = String(button.dataset.eventQuick || "").trim();
+      setSelectedEventTag(tag);
+    });
+  });
+}
+
+function renderEventSuggestions(inputText) {
+  if (!dom.eventSuggestions) return;
+  const input = String(inputText || "").trim().toLowerCase();
+  if (!input) {
+    dom.eventSuggestions.innerHTML = "";
+    return;
+  }
+
+  const matches = collectEventCandidates(input);
+  const hasExact = matches.some(match => normalizeTag(match.label) === normalizeTag(input));
+  const suggestions = matches.map(match => (
+    `<button class="tag-suggestion-item" type="button" data-event-suggestion="${escapeHtml(match.label)}">${escapeHtml(match.label)}</button>`
+  ));
+
+  if (!hasExact) {
+    suggestions.push(`<button class="tag-suggestion-item" type="button" data-event-custom="${escapeHtml(input)}">+ use custom: ${escapeHtml(input)}</button>`);
+  }
+
+  dom.eventSuggestions.innerHTML = suggestions.join("");
+  dom.eventSuggestions.querySelectorAll("button[data-event-suggestion]").forEach(button => {
+    button.addEventListener("click", () => {
+      const tag = String(button.dataset.eventSuggestion || "").trim();
+      setSelectedEventTag(tag);
+    });
+  });
+
+  dom.eventSuggestions.querySelectorAll("button[data-event-custom]").forEach(button => {
+    button.addEventListener("click", () => {
+      const tag = String(button.dataset.eventCustom || "").trim();
+      setSelectedEventTag(tag);
+    });
+  });
 }
 
 function buildSimplifiedContext() {
@@ -1388,9 +2255,7 @@ function buildSimplifiedContext() {
 
   const reason = String(reasonInput.value || "").trim();
   const classification = String(classSelect.value || "").trim();
-  const amount = simplifiedScoreAmount || 0;
-
-  if (!reason || !classification || !amount) return null;
+  if (!reason || !classification) return null;
 
   const [catId, evId, subId] = classification.split("|");
   const category = getCategoryById(catId);
@@ -1407,34 +2272,45 @@ function buildSimplifiedContext() {
     subeventId: subevent.id,
     subeventName: subevent.name,
     reason,
-    amount,
     pathLabel: `${category.name} > ${event.name} > ${subevent.name}`
   };
 }
 
 function attachSimplifiedFormListeners() {
+  dom.eventSearchInput?.addEventListener("input", event => {
+    const value = String(event.target.value || "").trim().toLowerCase();
+    if (event.target && event.target.value !== value) {
+      event.target.value = value;
+    }
+    if (value && normalizeTag(value) === normalizeTag(selectedEventTag)) {
+      renderEventSuggestions("");
+      return;
+    }
+    renderEventSuggestions(value);
+    syncPermissionControlledUi();
+  });
+
+  dom.eventSearchInput?.addEventListener("keydown", event => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const raw = String(dom.eventSearchInput?.value || "").trim().toLowerCase();
+    if (!raw) return;
+    setSelectedEventTag(raw);
+    syncPermissionControlledUi();
+  });
+
   document.getElementById("reasonComboInput")?.addEventListener("input", () => {
+    const reasonValue = String(document.getElementById("reasonComboInput")?.value || "").trim();
+    if (dom.reasonInput) dom.reasonInput.value = reasonValue;
     renderSimplifiedReasonCombo();
+    syncPermissionControlledUi();
   });
 
   document.getElementById("classificationSelect")?.addEventListener("change", () => {
     renderSimplifiedReasonCombo();
+    syncPermissionControlledUi();
   });
 
-  document.querySelectorAll(".btn-amount").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".btn-amount").forEach(b => b.classList.remove("selected"));
-      btn.classList.add("selected");
-      simplifiedScoreAmount = Number(btn.dataset.amount || 0);
-      const customInput = document.getElementById("customAmountInput");
-      if (customInput) customInput.value = "";
-    });
-  });
-
-  document.getElementById("customAmountInput")?.addEventListener("input", (e) => {
-    document.querySelectorAll(".btn-amount").forEach(b => b.classList.remove("selected"));
-    simplifiedScoreAmount = Number(e.target.value || 0);
-  });
 }
 
 function createDeltaButton(delta) {
@@ -1531,8 +2407,10 @@ function updatePlacePreview() {
 }
 
 function openHelpDialog() {
+  if (!dom.helpDialog) return;
   closeAccountDialog();
   closeAdminDialog();
+  closeWorkspaceDialog();
   lastHelpFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.classList.add("overlay-open");
   dom.helpDialog.hidden = false;
@@ -1542,6 +2420,7 @@ function openHelpDialog() {
 }
 
 function closeHelpDialog(options = {}) {
+  if (!dom.helpDialog) return;
   const { restoreFocus = true } = options;
   dom.helpDialog.hidden = true;
   dom.helpBtn?.setAttribute("aria-expanded", "false");
@@ -1558,6 +2437,7 @@ function closeHelpDialog(options = {}) {
 
 function openAccountDialog() {
   closeHelpDialog({ restoreFocus: false });
+  closeWorkspaceDialog();
   closeAdminDialog();
   document.body.classList.add("overlay-open");
   dom.accountDialog.hidden = false;
@@ -1574,10 +2454,12 @@ function openAdminDialog() {
     return;
   }
   closeHelpDialog({ restoreFocus: false });
+  closeWorkspaceDialog();
   closeAccountDialog();
   document.body.classList.add("overlay-open");
   dom.adminDialog.hidden = false;
   void refreshUserList();
+  void refreshContactInbox();
   void refreshBackupList();
 }
 
@@ -1590,10 +2472,15 @@ function closeAllDialogs() {
   closeHelpDialog({ restoreFocus: false });
   closeAccountDialog();
   closeAdminDialog();
+  closeWorkspaceDialog();
 }
 
 function clearOverlayClassIfNoDialogs() {
-  if (!dom.helpDialog.hidden || !dom.accountDialog.hidden || !dom.adminDialog.hidden) return;
+  const helpOpen = dom.helpDialog ? !dom.helpDialog.hidden : false;
+  const accountOpen = dom.accountDialog ? !dom.accountDialog.hidden : false;
+  const adminOpen = dom.adminDialog ? !dom.adminDialog.hidden : false;
+  const workspaceOpen = dom.workspaceDialog ? !dom.workspaceDialog.hidden : false;
+  if (helpOpen || accountOpen || adminOpen || workspaceOpen) return;
   document.body.classList.remove("overlay-open");
 }
 
@@ -1621,12 +2508,13 @@ function actionKey(action = {}) {
 function applySessionIdentity({ email, uid, role }) {
   currentUserEmail = email;
   currentUserUid = uid;
-  currentRole = role;
-  currentPermissions = resolveRolePermissions(role);
-  applyRoleClass(role);
-  dom.loggedInAs.textContent = `${email} (${roleDisplayLabel(role)})`;
+  authenticatedRole = normalizeRole(role);
+  demoRolePreview = "";
+  applyEffectiveRoleState();
   dom.profileInitials.textContent = initialsFromEmail(email);
   dom.resetEmailInput.value = email;
+  const identity = document.getElementById("emailContactIdentity");
+  if (identity) identity.textContent = getCurrentUserDisplayName();
   renderPermissionGrid();
   renderHouseCards();
   syncPermissionControlledUi();
@@ -1638,12 +2526,17 @@ function applySessionIdentity({ email, uid, role }) {
 function resetSignedOutUi() {
   currentUserEmail = "";
   currentUserUid = "";
+  authenticatedRole = "";
+  demoRolePreview = "";
   currentRole = "";
   currentPermissions = { ...ROLE_DEFAULTS.staff };
   applyRoleClass("");
   dom.loggedInAs.textContent = "-";
   dom.profileInitials.textContent = "--";
   dom.resetEmailInput.value = "";
+  const identity = document.getElementById("emailContactIdentity");
+  if (identity) identity.textContent = getCurrentUserDisplayName();
+  updateDemoRoleUi();
   dom.studentLookupInput.value = "";
   setStudentLookupStatus("Type to search the secure student directory.");
   clearStudentLookupResults();
@@ -1654,6 +2547,17 @@ function resetSignedOutUi() {
   activeWorkspace = "scoring";
   renderWorkspace();
   activeContext = null;
+  resetEventDraft();
+  selectedEventTag = "";
+  if (dom.eventSearchInput) dom.eventSearchInput.value = "";
+  if (dom.reasonStep) dom.reasonStep.hidden = true;
+  if (dom.reasonInput) dom.reasonInput.value = "";
+  if (document.getElementById("reasonComboInput")) document.getElementById("reasonComboInput").value = "";
+  if (dom.eventSuggestions) dom.eventSuggestions.innerHTML = "";
+  if (dom.eventSelectedDisplay) {
+    dom.eventSelectedDisplay.hidden = true;
+    dom.eventSelectedDisplay.innerHTML = "";
+  }
   updateContextSummary();
   renderPermissionGrid();
   syncPermissionControlledUi();
@@ -1661,19 +2565,15 @@ function resetSignedOutUi() {
 }
 
 function syncPermissionControlledUi() {
-  // Guard: ensure critical DOM elements exist
-  if (!dom.reasonCommitBtn || !dom.reasonClearBtn || !dom.categorySelect || !dom.eventSelect || !dom.subeventSelect || !dom.eventModeSelect) {
-    console.warn("Missing critical DOM elements in syncPermissionControlledUi");
-    return;
-  }
   const hasContext = Boolean(activeContext);
+  const hasReadyContext = Boolean(activeContext || buildContextFromInputs());
   const canDirectScore = can("scoreEdit");
   const canSuggest = can("proposePoints");
   const canContextSetup = canDirectScore || canSuggest;
-  const canScoreLikeAction = hasContext && (canDirectScore || canSuggest);
-  const canUsePlace = hasContext && (can("placeAwards") || canSuggest);
+  const canScoreLikeAction = hasReadyContext && (canDirectScore || canSuggest);
+  const canUsePlace = hasReadyContext && (can("placeAwards") || canSuggest);
 
-  dom.housesContainer.querySelectorAll("button[data-delta],button[data-role],input[id^='custom-']").forEach(el => {
+  dom.housesContainer?.querySelectorAll("button[data-delta],button[data-role],input[id^='custom-']").forEach(el => {
     el.disabled = !canScoreLikeAction;
   });
 
@@ -1681,59 +2581,70 @@ function syncPermissionControlledUi() {
     select.disabled = !canUsePlace;
   });
 
-  dom.autoFillBtn.disabled = !canUsePlace;
-  dom.clearPlacesBtn.disabled = !canUsePlace;
-  dom.applyPlacesBtn.disabled = !canUsePlace;
+  if (dom.autoFillBtn) dom.autoFillBtn.disabled = !canUsePlace;
+  if (dom.clearPlacesBtn) dom.clearPlacesBtn.disabled = !canUsePlace;
+  if (dom.applyPlacesBtn) dom.applyPlacesBtn.disabled = !canUsePlace;
 
-  dom.checkpointName.disabled = !can("checkpoint");
-  dom.checkpointBtn.disabled = !can("checkpoint");
-  dom.resetBtn.disabled = !can("resetAll");
+  if (dom.checkpointName) dom.checkpointName.disabled = !can("checkpoint");
+  if (dom.checkpointBtn) dom.checkpointBtn.disabled = !can("checkpoint");
+  if (dom.resetBtn) dom.resetBtn.disabled = !can("resetAll");
 
   // legacy controls removed from new model
-  dom.undoBtn.disabled = true;
-  dom.redoBtn.disabled = true;
-  dom.undoBtn.style.display = "none";
-  dom.redoBtn.style.display = "none";
+  if (dom.undoBtn) {
+    dom.undoBtn.disabled = true;
+    dom.undoBtn.style.display = "none";
+  }
+  if (dom.redoBtn) {
+    dom.redoBtn.disabled = true;
+    dom.redoBtn.style.display = "none";
+  }
 
-  dom.reasonCommitBtn.disabled = false;
-  dom.reasonClearBtn.disabled = !hasContext;
+  if (dom.reasonCommitBtn) dom.reasonCommitBtn.disabled = !canContextSetup;
+  if (dom.reasonClearBtn) dom.reasonClearBtn.disabled = !hasContext;
+  if (dom.applyEventDraftBtn) dom.applyEventDraftBtn.disabled = !hasContext || !hasEventDraftChanges();
+  if (dom.endEventBtn) dom.endEventBtn.disabled = !hasContext;
   if (dom.requestPathBtn) dom.requestPathBtn.disabled = !(can("proposePoints") || can("manageCatalog"));
-  dom.reasonTemplateSelect.disabled = !canContextSetup;
+  if (dom.reasonTemplateSelect) dom.reasonTemplateSelect.disabled = !canContextSetup;
   if (dom.reasonDetailInput) dom.reasonDetailInput.disabled = !canContextSetup;
   if (dom.useReasonTemplateBtn) dom.useReasonTemplateBtn.disabled = !canContextSetup;
   if (dom.usedReasonSelect) dom.usedReasonSelect.disabled = !canContextSetup;
-  dom.customReasonInput.disabled = !canContextSetup;
+  if (dom.customReasonInput) dom.customReasonInput.disabled = !canContextSetup;
   if (dom.applyUsedReasonBtn) dom.applyUsedReasonBtn.disabled = !canContextSetup;
-  dom.eventModeSelect.disabled = !canContextSetup;
-  dom.seasonInput.disabled = !canContextSetup;
-  if (dom.sessionInput) dom.sessionInput.disabled = dom.eventModeSelect.value !== "session" || !canContextSetup;
+  if (dom.eventModeSelect) dom.eventModeSelect.disabled = !canContextSetup;
+  if (dom.seasonInput) dom.seasonInput.disabled = !canContextSetup;
+  if (dom.sessionInput) dom.sessionInput.disabled = (dom.eventModeSelect?.value !== "session") || !canContextSetup;
 
-  dom.resetEmailInput.disabled = !can("passwordReset") || TEST_MODE;
-  dom.resetPasswordBtn.disabled = !can("passwordReset") || TEST_MODE;
-  dom.studentLookupInput.disabled = !can("studentLookup") || TEST_MODE;
-  dom.studentLookupPanel.hidden = !can("studentLookup");
+  if (dom.resetEmailInput) dom.resetEmailInput.disabled = !can("passwordReset") || TEST_MODE;
+  if (dom.resetPasswordBtn) dom.resetPasswordBtn.disabled = !can("passwordReset") || TEST_MODE;
+  if (dom.studentLookupInput) dom.studentLookupInput.disabled = !can("studentLookup") || TEST_MODE;
+  if (dom.studentLookupPanel) dom.studentLookupPanel.hidden = !can("studentLookup");
 
-  dom.adminBtn.disabled = !(can("manageUsers") || can("manageCatalog") || can("approveProposals") || currentRole === "superadmin") || TEST_MODE;
-  dom.createUserBtn.disabled = !can("manageUsers") || TEST_MODE;
-  dom.refreshUsersBtn.disabled = !can("manageUsers") || TEST_MODE;
-  dom.userSearch.disabled = !can("manageUsers") || TEST_MODE;
-  dom.catalogAddPathBtn.disabled = !can("manageCatalog") || TEST_MODE;
-  dom.syncPointsBtn.disabled = !can("approveProposals") || TEST_MODE;
-  dom.createBackupBtn.disabled = currentRole !== "superadmin" || TEST_MODE;
-  dom.refreshBackupsBtn.disabled = currentRole !== "superadmin" || TEST_MODE;
-  dom.backupLabelInput.disabled = currentRole !== "superadmin" || TEST_MODE;
+  if (dom.adminBtn) dom.adminBtn.disabled = !(can("manageUsers") || can("manageCatalog") || can("approveProposals") || currentRole === "superadmin") || TEST_MODE;
+  if (dom.createUserBtn) dom.createUserBtn.disabled = !can("manageUsers") || TEST_MODE;
+  if (dom.refreshUsersBtn) dom.refreshUsersBtn.disabled = !can("manageUsers") || TEST_MODE;
+  if (dom.userSearch) dom.userSearch.disabled = !can("manageUsers") || TEST_MODE;
+  if (dom.catalogAddPathBtn) dom.catalogAddPathBtn.disabled = !can("manageCatalog") || TEST_MODE;
+  if (dom.syncPointsBtn) dom.syncPointsBtn.disabled = !can("approveProposals") || TEST_MODE;
+  if (dom.refreshContactBtn) dom.refreshContactBtn.disabled = !["admin", "superadmin"].includes(currentRole) || TEST_MODE;
+  if (dom.createBackupBtn) dom.createBackupBtn.disabled = currentRole !== "superadmin" || TEST_MODE;
+  if (dom.refreshBackupsBtn) dom.refreshBackupsBtn.disabled = currentRole !== "superadmin" || TEST_MODE;
+  if (dom.backupLabelInput) dom.backupLabelInput.disabled = currentRole !== "superadmin" || TEST_MODE;
   if (dom.sheetSyncPanel) dom.sheetSyncPanel.hidden = !can("approveProposals");
   if (dom.backupManagerPanel) dom.backupManagerPanel.hidden = currentRole !== "superadmin";
+  if (dom.demoRoleCard) dom.demoRoleCard.hidden = authenticatedRole !== "superadmin" || TEST_MODE;
+  if (dom.demoRoleSelect) dom.demoRoleSelect.disabled = authenticatedRole !== "superadmin" || TEST_MODE;
+  if (dom.applyDemoRoleBtn) dom.applyDemoRoleBtn.disabled = authenticatedRole !== "superadmin" || TEST_MODE;
+  if (dom.clearDemoRoleBtn) dom.clearDemoRoleBtn.disabled = authenticatedRole !== "superadmin" || TEST_MODE || !isDemoRoleActive();
 
   const historyAllowed = can("historyAccess");
   [dom.historySearch, dom.historyPreset, dom.historyStart, dom.historyEnd, dom.historySort, dom.historyType, dom.historyLimit, dom.jumpTime, dom.jumpBtn].forEach(control => {
     if (control) control.disabled = !historyAllowed;
   });
 
-  dom.backupBtn.disabled = !can("downloadBackup");
+  if (dom.backupBtn) dom.backupBtn.disabled = !can("downloadBackup");
 
-  dom.userAdminPanel.hidden = !(can("manageUsers") && !TEST_MODE);
-  dom.proposalPanel.hidden = !(can("approveProposals") || can("proposePoints"));
+  if (dom.userAdminPanel) dom.userAdminPanel.hidden = !(can("manageUsers") && !TEST_MODE);
+  if (dom.proposalPanel) dom.proposalPanel.hidden = !(can("approveProposals") || can("proposePoints"));
 
   const tabs = dom.workspaceNav?.querySelectorAll("[data-workspace-tab]") || [];
   tabs.forEach(tab => {
@@ -1741,11 +2652,13 @@ function syncPermissionControlledUi() {
     if (key === "history") tab.disabled = !can("historyAccess");
     if (key === "queue") tab.disabled = !(can("approveProposals") || can("proposePoints"));
     if (key === "activity") tab.disabled = false;
+    if (key === "support") tab.disabled = !["admin", "superadmin"].includes(currentRole);
     if (key === "scoring") tab.disabled = false;
   });
 
   if (activeWorkspace === "history" && !can("historyAccess")) activeWorkspace = "scoring";
   if (activeWorkspace === "queue" && !(can("approveProposals") || can("proposePoints"))) activeWorkspace = "scoring";
+  if (activeWorkspace === "support" && !["admin", "superadmin"].includes(currentRole)) activeWorkspace = "scoring";
   renderWorkspace();
 }
 
@@ -1868,6 +2781,29 @@ function buildVirtualPendingEntries() {
     }));
 }
 
+function historyContextLabel(entry) {
+  const context = entry?.context || null;
+  if (!context) return "General / Uncategorized";
+  const pathLabel = String(context.pathLabel || "").trim();
+  if (pathLabel) return pathLabel;
+  const categoryName = String(context.categoryName || "").trim();
+  const eventName = String(context.eventName || "").trim();
+  const subeventName = String(context.subeventName || "").trim();
+  const parts = [categoryName, eventName, subeventName].filter(Boolean);
+  return parts.length ? parts.join(" > ") : "General / Uncategorized";
+}
+
+function buildDeltaChips(changes = {}) {
+  const houseIds = ["red", "white", "blue", "silver"];
+  return houseIds.map(houseId => {
+    const value = Number(changes?.[houseId] || 0);
+    const polarity = value > 0 ? "delta-pos" : value < 0 ? "delta-neg" : "";
+    const shorthand = houseId === "red" ? "R" : houseId === "white" ? "W" : houseId === "blue" ? "B" : "S";
+    const signed = `${value > 0 ? "+" : ""}${value}`;
+    return `<span class="history-delta-chip ${polarity}">${shorthand} ${signed}</span>`;
+  }).join("");
+}
+
 function renderHistoryList() {
   renderHistoryStats();
 
@@ -1908,35 +2844,63 @@ function renderHistoryList() {
     return;
   }
 
-  dom.historyList.innerHTML = entries.map(entry => {
-    const changes = entry.changes || {};
-    const chips = `
-      <span class="history-delta-chip ${Number(changes.red || 0) > 0 ? "delta-pos" : (Number(changes.red || 0) < 0 ? "delta-neg" : "")}">R ${Number(changes.red || 0) > 0 ? "+" : ""}${Number(changes.red || 0)}</span>
-      <span class="history-delta-chip ${Number(changes.white || 0) > 0 ? "delta-pos" : (Number(changes.white || 0) < 0 ? "delta-neg" : "")}">W ${Number(changes.white || 0) > 0 ? "+" : ""}${Number(changes.white || 0)}</span>
-      <span class="history-delta-chip ${Number(changes.blue || 0) > 0 ? "delta-pos" : (Number(changes.blue || 0) < 0 ? "delta-neg" : "")}">B ${Number(changes.blue || 0) > 0 ? "+" : ""}${Number(changes.blue || 0)}</span>
-      <span class="history-delta-chip ${Number(changes.silver || 0) > 0 ? "delta-pos" : (Number(changes.silver || 0) < 0 ? "delta-neg" : "")}">S ${Number(changes.silver || 0) > 0 ? "+" : ""}${Number(changes.silver || 0)}</span>
-    `;
+  const grouped = new Map();
+  entries.forEach(entry => {
+    const label = historyContextLabel(entry);
+    const key = label.toLowerCase();
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        label,
+        latestMs: 0,
+        net: { red: 0, white: 0, blue: 0, silver: 0 },
+        entries: []
+      });
+    }
+    const group = grouped.get(key);
+    group.entries.push(entry);
+    group.latestMs = Math.max(group.latestMs, Number(entry.createdAtMs || 0));
+    group.net.red += Number(entry.changes?.red || 0);
+    group.net.white += Number(entry.changes?.white || 0);
+    group.net.blue += Number(entry.changes?.blue || 0);
+    group.net.silver += Number(entry.changes?.silver || 0);
+  });
 
-    const contextText = entry.context?.pathLabel || (entry.context
-      ? `${entry.context.categoryName} > ${entry.context.eventName} > ${entry.context.subeventName}`
-      : "No path");
-
-    const highlightClass = highlightEntryId && highlightEntryId === entry.id ? " history-subitem" : "";
-
+  const sortedGroups = Array.from(grouped.values()).sort((a, b) => b.latestMs - a.latestMs);
+  dom.historyList.innerHTML = sortedGroups.map(group => {
+    const groupEntries = group.entries.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
     return `
-      <li class="history-item${highlightClass}">
-        <div>
-          <div class="history-row-top">
-            <span class="history-type">${mapActionTypeLabel(entry.type)}</span>
-            <span>${entry.summary || "Untitled action"}</span>
+      <li class="history-group">
+        <div class="history-group-head">
+          <div>
+            <div class="history-group-title">${escapeHtml(group.label)}</div>
+            <div class="history-meta">${groupEntries.length} entr${groupEntries.length === 1 ? "y" : "ies"} · latest ${new Date(group.latestMs || Date.now()).toLocaleString()}</div>
           </div>
-          <div class="history-meta">${new Date(Number(entry.createdAtMs || Date.now())).toLocaleString()} · ${entry.actorEmail || "unknown"} · ${contextText}</div>
-          <div class="history-delta-strip">${chips}</div>
-          ${entry.notes ? `<div class="history-meta">Notes: ${entry.notes}</div>` : ""}
+          <div class="history-delta-strip">${buildDeltaChips(group.net)}</div>
         </div>
-        <div class="history-item-actions">
-          ${entry.type === "savepoint" && can("restoreHistory") ? `<button class="btn btn-outline btn-mini" type="button" data-restore-savepoint="${entry.id}">Restore</button>` : ""}
-        </div>
+        <ul class="history-group-list">
+          ${groupEntries.map(entry => {
+            const highlightClass = highlightEntryId && highlightEntryId === entry.id ? " history-subitem" : "";
+            const reasonLine = entry.reason ? `<div class="history-meta"><strong>Reason:</strong> ${escapeHtml(String(entry.reason || ""))}</div>` : "";
+            const notesLine = entry.notes ? `<div class="history-meta"><strong>Notes:</strong> ${escapeHtml(String(entry.notes || ""))}</div>` : "";
+            return `
+              <li class="history-item${highlightClass}">
+                <div>
+                  <div class="history-row-top">
+                    <span class="history-type">${escapeHtml(mapActionTypeLabel(entry.type))}</span>
+                    <span>${escapeHtml(String(entry.summary || "Untitled action"))}</span>
+                  </div>
+                  <div class="history-meta">${new Date(Number(entry.createdAtMs || Date.now())).toLocaleString()} · ${escapeHtml(String(entry.actorEmail || "unknown"))}</div>
+                  <div class="history-delta-strip">${buildDeltaChips(entry.changes || {})}</div>
+                  ${reasonLine}
+                  ${notesLine}
+                </div>
+                <div class="history-item-actions">
+                  ${entry.type === "savepoint" && can("restoreHistory") ? `<button class="btn btn-outline btn-mini" type="button" data-restore-savepoint="${entry.id}">Restore</button>` : ""}
+                </div>
+              </li>
+            `;
+          }).join("")}
+        </ul>
       </li>
     `;
   }).join("");
@@ -1991,14 +2955,15 @@ function renderUserList() {
   }
 
   dom.userList.innerHTML = filtered.map(profile => {
+    const editId = String(profile.uid || profile.id || "");
     return `
       <li class="user-item">
         <div>
           <strong>${profile.name || "(No Name)"}</strong>
-          <div class="user-meta">${profile.email || profile.uid} · role=${normalizeRole(profile.role)}</div>
+          <div class="user-meta">${profile.email || profile.uid || profile.id} · role=${normalizeRole(profile.role)}</div>
         </div>
         <div class="user-actions">
-          <button class="btn btn-outline btn-mini" type="button" data-user-edit="${profile.uid}">Edit</button>
+          <button class="btn btn-outline btn-mini" type="button" data-user-edit="${escapeHtml(editId)}">Edit</button>
         </div>
       </li>
     `;
@@ -2161,21 +3126,20 @@ async function withWrite(task) {
 }
 
 function activeContextOrWarn() {
-  // Allow scoring with default/minimal context if none is set
   if (activeContext) return activeContext;
 
-  // Create a default context that allows scoring but marks it as untagged
-  return {
-    category: "",
-    event: "",
-    subevent: "",
-    mode: "recurring",
-    season: "",
-    sessionId: "",
-    reason: "Untagged",
-    notes: "",
-    isDefault: true  // Flag to indicate this is auto-created
-  };
+  const autoContext = buildContextFromInputs();
+  if (autoContext) {
+    activeContext = autoContext;
+    updateContextSummary();
+    renderReasonTracker();
+    syncPermissionControlledUi();
+    showToast("Context started from selected reason and event.", "info");
+    return activeContext;
+  }
+
+  showToast("Select an event tag and reason, then click Start Context.", "warn");
+  return null;
 }
 
 function currentCommitLabel() {
@@ -2394,10 +3358,77 @@ async function submitScoringAction({ type, summary, changes }) {
   showToast("Your role cannot score or suggest points.", "warn");
 }
 
+async function submitScoringActionWithTags({ house, amount, tags, notes }) {
+  if (!can("scoreEdit") && !can("proposePoints")) {
+    showToast("Your role cannot score or suggest points.", "warn");
+    return;
+  }
+
+  if (!house || amount <= 0 || !tags || tags.length === 0) {
+    showToast("Missing required information", "warn");
+    return;
+  }
+
+  const baseContext = activeContextOrWarn();
+  if (!baseContext) return;
+
+  const changes = {
+    [house]: amount,
+    red: house === "red" ? amount : 0,
+    white: house === "white" ? amount : 0,
+    blue: house === "blue" ? amount : 0,
+    silver: house === "silver" ? amount : 0,
+  };
+
+  const houseInfo = houses.find(h => h.id === house);
+  const tagNames = tags.map(id => {
+    const tag = tagLibrary?.tags.find(t => t.id === id);
+    return tag?.name || id;
+  });
+  const tagReason = tagNames.join(", ");
+  const summary = `${houseInfo?.name || house} ${amount > 0 ? "+" : ""}${amount} · [${tagReason}]`;
+  const context = {
+    ...baseContext,
+    reason: baseContext.reason || tagReason,
+    notes: notes || baseContext.notes || "",
+    tags
+  };
+
+  if (can("scoreEdit")) {
+    const write = await withWrite(() => applyDirectScoreAction({
+      type: "delta",
+      summary,
+      changes,
+      context,
+      reason: tagReason || context.reason,
+      notes: context.notes,
+      extra: { tags, eventTag: tags[0] }
+    }));
+    if (write.ok && write.value?.applied) {
+      showToast("✅ Points scored!", "success");
+    }
+    return;
+  }
+
+  if (can("proposePoints")) {
+    const write = await withWrite(() => submitProposal({
+      actionType: "score_change",
+      summary,
+      changes,
+      context,
+      reason: tagReason || context.reason,
+      notes: context.notes,
+      eventTag: tags[0],
+      tags
+    }));
+    if (write.ok) showToast("✅ Scoring submitted for review", "info");
+    return;
+  }
+}
+
 async function submitHouseDelta(house, delta) {
   if (!Number.isFinite(delta) || delta === 0) return;
-  const summary = `${houses.find(candidate => candidate.id === house)?.name || house} ${delta > 0 ? "+" : ""}${delta}`;
-  await submitScoringAction({ type: "delta", summary, changes: changesFromHouseDelta(house, delta) });
+  queueHouseDeltaInDraft(house, delta);
 }
 
 function parseCustomAmount(houseId) {
@@ -2561,22 +3592,40 @@ async function restoreFromSavepoint(entryId) {
 function startContextFromInputs() {
   const nextContext = buildContextFromInputs();
   if (!nextContext) {
-    showToast("Pick category/event/subevent and enter a valid reason. Session mode requires session name.", "warn");
+    showToast("Pick an event tag and enter a reason to start context.", "warn");
     return;
   }
+
+  const switchingContext = Boolean(activeContext) && (
+    routeKey(activeContext) !== routeKey(nextContext) ||
+    String(activeContext.reason || "").trim().toLowerCase() !== String(nextContext.reason || "").trim().toLowerCase()
+  );
+  if (switchingContext && hasEventDraftChanges()) {
+    const discard = window.confirm("You have pending event changes. Discard them and switch events?");
+    if (!discard) return;
+    resetEventDraft();
+  }
+
   activeContext = nextContext;
   updateContextSummary();
   syncPermissionControlledUi();
   renderReasonTracker();
+  renderHouseCards();
   showToast(can("scoreEdit") ? "Event context started." : "Event context ready for suggestions.", "success");
 }
 
-function clearContext() {
+function clearContext(options = {}) {
+  const quiet = Boolean(options.quiet);
+  if (hasEventDraftChanges()) {
+    const discard = window.confirm("Discard pending event changes and end this event?");
+    if (!discard) return;
+  }
+  resetEventDraft();
   activeContext = null;
   updateContextSummary();
   syncPermissionControlledUi();
   renderReasonTracker();
-  showToast("Event context locked.", "info");
+  if (!quiet) showToast("Event context locked.", "info");
 }
 
 async function requestNewPath() {
@@ -2940,6 +3989,16 @@ async function requestPointsSync() {
       requestedAt: serverTimestamp(),
       source: "control-panel"
     });
+    await setDoc(scoresDoc, {
+      sheetSync: {
+        request: {
+          status: "queued",
+          requestedAtMs,
+          requestedAt: serverTimestamp(),
+          requestedByEmail: currentUserEmail
+        }
+      }
+    }, { merge: true });
   });
 
   if (write.ok) {
@@ -3248,10 +4307,11 @@ async function createOrUpdateUserFromPanel() {
 
     if (!uid) {
       const existing = await getProfileByEmail(email);
-      if (!existing?.uid) {
+      const existingUid = String(existing?.uid || existing?.id || "").trim();
+      if (!existingUid) {
         throw new Error("No existing account found for this email. Provide a password to create one.");
       }
-      uid = existing.uid;
+      uid = existingUid;
     }
 
     const permissions = resolveRolePermissions(role);
@@ -3299,6 +4359,136 @@ async function refreshUserList() {
     console.error(error);
     showToast("Failed to load users list.", "warn");
   }
+}
+
+function setContactInboxStatus(message) {
+  if (dom.contactInboxStatus) dom.contactInboxStatus.textContent = message;
+}
+
+function formatContactMessageTime(entry) {
+  if (!entry) return "Unknown time";
+  const raw = entry.createdAtMs || entry.createdAt?.toMillis?.();
+  if (!raw) return "Unknown time";
+  return new Date(raw).toLocaleString();
+}
+
+function renderContactInboxMessages(messages = []) {
+  if (!dom.contactInboxList) return;
+  if (!messages.length) {
+    dom.contactInboxList.innerHTML = "<li class=\"log-empty\">No messages yet.</li>";
+    return;
+  }
+
+  dom.contactInboxList.innerHTML = messages.map(msg => {
+    const name = escapeHtml(String(msg.name || msg.userEmail || "Unknown"));
+    const purpose = escapeHtml(String(msg.purpose || "other"));
+    const subject = escapeHtml(String(msg.subject || "No subject"));
+    const message = escapeHtml(String(msg.message || ""));
+    const time = escapeHtml(formatContactMessageTime(msg));
+    return `
+      <li class="mini-list-item">
+        <div>
+          <strong>${subject}</strong>
+          <div class="muted">${purpose} · ${name} · ${time}</div>
+          <div>${message}</div>
+        </div>
+        ${can("approveProposals") ? `<button class="btn btn-outline btn-mini" type="button" data-contact-delete="${escapeHtml(msg.id || "")}">Delete</button>` : ""}
+      </li>
+    `;
+  }).join("");
+}
+
+async function deleteContactMessage(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id) return;
+  if (!can("approveProposals")) {
+    showToast("Only admins can delete support messages.", "warn");
+    return;
+  }
+  const confirmed = window.confirm("Delete this support message?");
+  if (!confirmed) return;
+  try {
+    await deleteDoc(doc(db, "contactMessages", id));
+    showToast("Support message deleted.", "success");
+    await refreshContactInbox();
+  } catch (error) {
+    console.error(error);
+    showToast("Failed to delete support message.", "warn");
+  }
+}
+
+async function refreshContactInbox() {
+  if (!dom.contactInboxList) return;
+  if (TEST_MODE || !["admin", "superadmin"].includes(currentRole)) {
+    dom.contactInboxList.innerHTML = "<li class=\"log-empty\">Contact inbox is only for admins.</li>";
+    setContactInboxStatus("Contact inbox is only available to admins.");
+    return;
+  }
+
+  try {
+    setContactInboxStatus("Loading messages...");
+    const snapshot = await getDocs(
+      query(collection(db, "contactMessages"), orderBy("createdAt", "desc"), limit(MAX_CONTACT_MESSAGES))
+    );
+    const messages = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    renderContactInboxMessages(messages);
+    setContactInboxStatus(`Loaded ${messages.length} message${messages.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    console.error(error);
+    if (String(error?.code || "").includes("permission") && currentUserUid) {
+      try {
+        const ownSnapshot = await getDocs(
+          query(collection(db, "contactMessages"), where("userId", "==", currentUserUid), limit(MAX_CONTACT_MESSAGES))
+        );
+        const ownMessages = ownSnapshot.docs
+          .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+          .sort((a, b) => Number(b.createdAtMs || b.createdAt?.toMillis?.() || 0) - Number(a.createdAtMs || a.createdAt?.toMillis?.() || 0));
+        renderContactInboxMessages(ownMessages);
+        setContactInboxStatus("Loaded your own messages. Full inbox requires admin/superadmin rule access.");
+        return;
+      } catch (fallbackError) {
+        console.error(fallbackError);
+      }
+    }
+    dom.contactInboxList.innerHTML = "<li class=\"log-empty\">Failed to load inbox.</li>";
+    setContactInboxStatus("Failed to load contact inbox.");
+  }
+}
+
+function applyDemoRolePreview() {
+  if (authenticatedRole !== "superadmin") {
+    showToast("Only superadmin can preview other roles.", "warn");
+    return;
+  }
+
+  const raw = String(dom.demoRoleSelect?.value || "").trim();
+  if (!raw) {
+    clearDemoRolePreview();
+    return;
+  }
+  const selected = normalizeRole(raw);
+  if (selected === authenticatedRole) {
+    clearDemoRolePreview();
+    return;
+  }
+
+  demoRolePreview = selected;
+  applyEffectiveRoleState();
+  renderPermissionGrid();
+  syncPermissionControlledUi();
+  if (activeWorkspace === "support") void refreshContactInbox();
+  showToast(`Previewing ${roleDisplayLabel(selected)} role.`, "info");
+}
+
+function clearDemoRolePreview(options = {}) {
+  const quiet = Boolean(options.quiet);
+  const wasActive = isDemoRoleActive();
+  demoRolePreview = "";
+  applyEffectiveRoleState();
+  renderPermissionGrid();
+  syncPermissionControlledUi();
+  if (dom.demoRoleSelect) dom.demoRoleSelect.value = "";
+  if (!quiet && wasActive) showToast("Returned to your real role.", "success");
 }
 
 async function writeBackupPayload(backupRef, subcollectionName, rows) {
@@ -3717,20 +4907,43 @@ function setupEventListeners() {
     void sendLoginPasswordResetLink();
   });
 
-  dom.helpBtn.addEventListener("click", () => {
-    if (dom.helpDialog.hidden) {
+  dom.helpBtn?.addEventListener("click", () => {
+    if (dom.helpDialog?.hidden) {
       openHelpDialog();
       return;
     }
     closeHelpDialog();
   });
+  dom.workspaceMenuBtn?.addEventListener("click", () => {
+    if (dom.workspaceDialog?.hidden) {
+      openWorkspaceDialog();
+      return;
+    }
+    closeWorkspaceDialog();
+  });
+  dom.notificationsBtn?.addEventListener("click", () => {
+    if (dom.notificationsPanel?.hidden) {
+      openNotificationsPanel();
+      return;
+    }
+    closeNotificationsPanel();
+  });
+  dom.closeNotificationsBtn?.addEventListener("click", closeNotificationsPanel);
+  dom.clearNotificationsBtn?.addEventListener("click", () => {
+    notificationsFeed = [];
+    renderNotifications();
+  });
+  dom.workspaceSwitchBtn?.addEventListener("click", () => {
+    openWorkspaceDialog();
+  });
+  dom.closeWorkspaceBtn?.addEventListener("click", closeWorkspaceDialog);
   dom.accountBtn.addEventListener("click", openAccountDialog);
   dom.adminBtn.addEventListener("click", openAdminDialog);
-  dom.closeHelpBtn.addEventListener("click", closeHelpDialog);
+  dom.closeHelpBtn?.addEventListener("click", closeHelpDialog);
   dom.closeAccountBtn.addEventListener("click", closeAccountDialog);
   dom.closeAdminBtn.addEventListener("click", closeAdminDialog);
 
-  dom.helpDialog.addEventListener("click", event => {
+  dom.helpDialog?.addEventListener("click", event => {
     if (event.target === dom.helpDialog) closeHelpDialog();
   });
   dom.accountDialog.addEventListener("click", event => {
@@ -3745,14 +4958,29 @@ function setupEventListeners() {
       closeAdminDialog();
     }
   });
+  dom.workspaceDialog?.addEventListener("click", event => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("[data-close-drawer='workspace']")) {
+      closeWorkspaceDialog();
+    }
+  });
 
-  dom.workspaceNav.addEventListener("click", event => {
+  document.addEventListener("click", event => {
+    if (!dom.notificationsPanel || dom.notificationsPanel.hidden) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.closest("#notificationsPanel") || target.closest("#notificationsBtn")) return;
+    closeNotificationsPanel();
+  });
+
+  dom.workspaceNav?.addEventListener("click", event => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const button = target.closest("button[data-workspace-tab]");
     if (!button || button.disabled) return;
     activeWorkspace = String(button.dataset.workspaceTab || "scoring");
     renderWorkspace();
+    closeWorkspaceDialog();
   });
 
   dom.categorySelect.addEventListener("change", renderCatalogSelects);
@@ -3772,32 +5000,14 @@ function setupEventListeners() {
     }
   });
 
-  // Tag selector event listeners
-  const tagSearchInput = document.getElementById("tagSearchInput");
-  const tagSelectorToggle = document.getElementById("tagSelectorToggle");
-  const tagSelectorPanel = document.getElementById("tagSelectorPanel");
-
-  if (tagSelectorToggle) {
-    tagSelectorToggle.addEventListener("change", event => {
-      if (tagSelectorPanel) {
-        tagSelectorPanel.hidden = !event.target.checked;
-      }
-    });
-  }
-
-  if (tagSearchInput) {
-    let tagSearchTimeout;
-    tagSearchInput.addEventListener("input", event => {
-      clearTimeout(tagSearchTimeout);
-      const input = String(event.target.value || "").trim();
-      tagSearchTimeout = setTimeout(() => {
-        renderFirestoreTagSuggestions(input);  // Use Firestore tag loader
-      }, 150);
-    });
-  }
-
-  dom.reasonCommitBtn.addEventListener("click", startContextFromInputs);
-  dom.reasonClearBtn.addEventListener("click", clearContext);
+  dom.reasonCommitBtn?.addEventListener("click", startContextFromInputs);
+  dom.reasonClearBtn?.addEventListener("click", clearContext);
+  dom.applyEventDraftBtn?.addEventListener("click", () => {
+    void applyEventDraftChanges({ endAfterApply: false });
+  });
+  dom.endEventBtn?.addEventListener("click", () => {
+    void applyEventDraftChanges({ endAfterApply: true });
+  });
   dom.requestPathBtn.addEventListener("click", () => {
     void requestNewPath();
   });
@@ -3881,6 +5091,26 @@ function setupEventListeners() {
     void refreshUserList();
   });
 
+  dom.refreshContactBtn?.addEventListener("click", () => {
+    void refreshContactInbox();
+  });
+
+  dom.contactInboxList?.addEventListener("click", event => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const deleteBtn = target.closest("button[data-contact-delete]");
+    if (!deleteBtn) return;
+    const id = String(deleteBtn.dataset.contactDelete || "");
+    void deleteContactMessage(id);
+  });
+
+  dom.applyDemoRoleBtn?.addEventListener("click", applyDemoRolePreview);
+  dom.demoRoleSelect?.addEventListener("change", () => {
+    if (!dom.demoRoleSelect?.value) clearDemoRolePreview({ quiet: true });
+  });
+  dom.clearDemoRoleBtn?.addEventListener("click", clearDemoRolePreview);
+  dom.exitDemoRoleBtn?.addEventListener("click", clearDemoRolePreview);
+
   dom.createBackupBtn.addEventListener("click", () => {
     void createSystemBackup();
   });
@@ -3925,6 +5155,8 @@ function setupEventListeners() {
     const reason = String(button.dataset.reasonChip || "").trim();
     if (!reason) return;
     dom.reasonInput.value = reason;
+    const comboInput = document.getElementById("reasonComboInput");
+    if (comboInput) comboInput.value = reason;
     showToast("Reason applied from recent history.", "info");
   });
 
@@ -3953,16 +5185,32 @@ function setupEventListeners() {
       const typing = target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
       if (!typing) {
         event.preventDefault();
-        if (dom.helpDialog.hidden) openHelpDialog();
+        if (dom.helpDialog?.hidden) openHelpDialog();
         else closeHelpDialog();
         return;
       }
     }
     if (event.key !== "Escape") return;
-    if (!dom.helpDialog.hidden) closeHelpDialog();
+    if (dom.helpDialog && !dom.helpDialog.hidden) closeHelpDialog();
     if (!dom.accountDialog.hidden) closeAccountDialog();
     if (!dom.adminDialog.hidden) closeAdminDialog();
+    if (dom.workspaceDialog && !dom.workspaceDialog.hidden) closeWorkspaceDialog();
+    if (dom.notificationsPanel && !dom.notificationsPanel.hidden) closeNotificationsPanel();
+    // Close email and tag modals on Escape
+    const emailModal = document.getElementById("emailContactFormModal");
+    const tagModal = document.getElementById("tagModalOverlay");
+    if (emailModal && !emailModal.hidden) closeEmailContactForm();
+    if (tagModal && !tagModal.hidden && tagModalController) tagModalController.close();
   });
+
+  // Email contact form listeners
+  document.getElementById("emailContactBtn")?.addEventListener("click", openEmailContactForm);
+  document.getElementById("closeEmailFormBtn")?.addEventListener("click", closeEmailContactForm);
+  document.getElementById("cancelEmailFormBtn")?.addEventListener("click", closeEmailContactForm);
+  document.getElementById("sendEmailFormBtn")?.addEventListener("click", () => void sendEmailContactForm());
+
+  const emailModal = document.getElementById("emailContactFormModal");
+  emailModal?.querySelector(".email-modal-scrim")?.addEventListener("click", closeEmailContactForm);
 }
 
 function stopLiveListeners() {
@@ -4156,6 +5404,16 @@ function bootAuth() {
       });
 
       await refreshUserList();
+
+      // Initialize tag library for tag-based scoring
+      if (!tagLibrary) {
+        tagLibrary = new TagLibrary();
+        await tagLibrary.load();
+      }
+      if (!tagModalController) {
+        tagModalController = new TagModalController(tagLibrary);
+      }
+
       startLiveListeners();
     } catch (error) {
       console.error("❌ Error during authentication flow:", error);
@@ -4166,46 +5424,12 @@ function bootAuth() {
 }
 
 // ============ PWA SERVICE WORKER ============
-if ("serviceWorker" in navigator && !TEST_MODE) {
-  navigator.serviceWorker.register(
-    new Blob([`
-      const CACHE = "house-points-v1";
-      const urlsToCache = ["/web/control/", "/web/manifest.json"];
-
-      self.addEventListener("install", event => {
-        event.waitUntil(
-          caches.open(CACHE).then(cache => cache.addAll(urlsToCache))
-        );
-      });
-
-      self.addEventListener("activate", event => {
-        event.waitUntil(
-          caches.keys().then(cacheNames =>
-            Promise.all(
-              cacheNames.map(name => name !== CACHE && caches.delete(name))
-            )
-          )
-        );
-      });
-
-      self.addEventListener("fetch", event => {
-        if (event.request.method !== "GET") return;
-
-        event.respondWith(
-          caches.match(event.request).then(response => {
-            return response || fetch(event.request).then(response => {
-              if (response.status === 200 && !response.url.includes("/api/")) {
-                const cache_response = response.clone();
-                caches.open(CACHE).then(cache => cache.put(event.request, cache_response));
-              }
-              return response;
-            }).catch(() => caches.match("/web/control/"));
-          })
-        );
-      });
-    `], { type: "application/javascript" }),
-    { scope: "/web/" }
-  ).catch(() => {});
+if ("serviceWorker" in navigator && ENABLE_PWA) {
+  navigator.serviceWorker
+    .register("./service-worker.js", { scope: "./" })
+    .catch(error => {
+      console.warn("Service worker registration failed:", error?.message || error);
+    });
 }
 
 // ============ ANALYTICS DASHBOARD ============
@@ -4236,6 +5460,13 @@ function renderAnalyticsDashboard() {
       return entryMs >= start && entryMs <= end;
     });
 
+    // Render new analytics improvements
+    renderAnalyticsSummaryCards();
+    checkAnomalies();
+    populateTagFilter();
+    renderFairPlayAudit();
+
+    // Render existing charts
     renderChartPointsByHouse(filtered);
     renderChartTopScorers(filtered);
     renderChartPointsByTag(filtered);
@@ -4433,6 +5664,159 @@ function exportAnalyticsPdf() {
   const text = "PDF export requires additional library. Please use CSV export instead.";
   showToast(text, "warn");
 }
+
+// ============ ANALYTICS IMPROVEMENTS ============
+
+function renderAnalyticsSummaryCards() {
+  const container = document.getElementById("analyticsSummaryCards");
+  if (!container) return;
+
+  // Calculate house performance metrics
+  const scores = currentScores || { red: 0, white: 0, blue: 0, silver: 0 };
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+
+  // Calculate trends (compare with last 7 days)
+  const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const recentEntries = auditEntries.filter(e => e.createdAtMs > sevenDaysAgo);
+  const recentByHouse = { red: 0, white: 0, blue: 0, silver: 0 };
+  recentEntries.forEach(e => {
+    const c = e.changes || {};
+    recentByHouse.red += c.red || 0;
+    recentByHouse.white += c.white || 0;
+    recentByHouse.blue += c.blue || 0;
+    recentByHouse.silver += c.silver || 0;
+  });
+
+  const cards = houses.map(house => {
+    const current = scores[house.id] || 0;
+    const previous = recentByHouse[house.id] || 0;
+    const trend = previous > 0 ? ((current - previous) / previous * 100).toFixed(0) : 0;
+    const trendIcon = trend > 0 ? "↑" : trend < 0 ? "↓" : "→";
+    const trendClass = trend > 0 ? "analytics-trend-up" : trend < 0 ? "analytics-trend-down" : "analytics-trend-neutral";
+
+    return `
+      <div class="analytics-summary-card">
+        <div class="analytics-summary-card-title">🏆 ${house.name}</div>
+        <div class="analytics-summary-card-value">${current}</div>
+        <div class="analytics-summary-card-meta">
+          <span class="${trendClass}">${trendIcon} ${Math.abs(trend)}%</span>
+          <span style="color: var(--muted);">vs 7d avg</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.innerHTML = cards;
+}
+
+function checkAnomalies() {
+  const alertContainer = document.getElementById("anomalyAlert");
+  if (!alertContainer) return;
+
+  // Check for unusual activity in last 2 hours
+  const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+  const recent = auditEntries.filter(e => e.createdAtMs > twoHoursAgo);
+
+  const totalRecentPoints = recent.reduce((sum, e) => {
+    const c = e.changes || {};
+    return sum + Math.abs((c.red || 0) + (c.white || 0) + (c.blue || 0) + (c.silver || 0));
+  }, 0);
+
+  // Anomaly threshold: 5x normal (20 pts/hr × 2hrs = 40pts normal, >200 is anomaly)
+  const NORMAL_PER_HOUR = 20;
+  const threshold = NORMAL_PER_HOUR * 2 * 5;
+
+  if (totalRecentPoints > threshold && recent.length > 0) {
+    const topHouse = recent.reduce((acc, e) => {
+      const c = e.changes || {};
+      const point = Math.abs((c.red || 0) + (c.white || 0) + (c.blue || 0) + (c.silver || 0));
+      return point > acc.points ? { ...acc, points: point, entry: e } : acc;
+    }, { points: 0 });
+
+    const houseName = houses.find(h => h.id === Object.keys(topHouse.entry?.changes || {})[0])?.name || "Unknown";
+    alertContainer.innerHTML = `
+      <div class="analytics-anomaly-alert-text">
+        ⚠️ <strong>${houseName}</strong> received +${totalRecentPoints} pts in 2 hours (avg: 40 pts/2hr)
+      </div>
+    `;
+    alertContainer.hidden = false;
+  } else {
+    alertContainer.hidden = true;
+  }
+}
+
+function populateTagFilter() {
+  const select = document.getElementById("analyticsTagFilter");
+  if (!select) return;
+
+  // Get unique tags from audit entries
+  const tags = new Set();
+  auditEntries.forEach(e => {
+    if (e.context?.reason) tags.add(e.context.reason);
+  });
+
+  const options = Array.from(tags)
+    .sort()
+    .map(tag => `<option value="${tag}">${tag}</option>`)
+    .join("");
+
+  select.innerHTML = '<option value="">All Tags</option>' + options;
+}
+
+function renderFairPlayAudit() {
+  const section = document.getElementById("analyticsAuditSection");
+  const table = document.getElementById("auditTrailTable");
+  if (!section || !table || !can("approveProposals")) return;
+
+  section.hidden = false;
+
+  // Aggregate scoring by user/admin
+  const adminMetrics = {};
+  auditEntries.forEach(e => {
+    const admin = e.createdByEmail || "unknown";
+    if (!adminMetrics[admin]) {
+      adminMetrics[admin] = { scores: 0, totalPoints: 0, reasons: {} };
+    }
+    adminMetrics[admin].scores += 1;
+    const c = e.changes || {};
+    const points = Math.abs((c.red || 0) + (c.white || 0) + (c.blue || 0) + (c.silver || 0));
+    adminMetrics[admin].totalPoints += points;
+    if (e.context?.reason) adminMetrics[admin].reasons[e.context.reason] = (adminMetrics[admin].reasons[e.context.reason] || 0) + 1;
+  });
+
+  const rows = Object.entries(adminMetrics)
+    .sort((a, b) => b[1].totalPoints - a[1].totalPoints)
+    .map(([admin, data]) => {
+      const topReason = Object.entries(data.reasons).sort((a, b) => b[1] - a[1])[0];
+      return `
+        <div class="audit-trail-row">
+          <div class="audit-admin-name">${admin}</div>
+          <div style="color: var(--muted); font-size: 12px;">
+            ${topReason ? `Top: ${topReason[0]} (${topReason[1]}x)` : "No reasons tracked"}
+          </div>
+          <div class="audit-metrics">
+            <div class="audit-metric">
+              <div class="audit-metric-label">Entries</div>
+              <div class="audit-metric-value">${data.scores}</div>
+            </div>
+            <div class="audit-metric">
+              <div class="audit-metric-label">Total Pts</div>
+              <div class="audit-metric-value">${data.totalPoints}</div>
+            </div>
+            <div class="audit-metric">
+              <div class="audit-metric-label">Avg/Entry</div>
+              <div class="audit-metric-value">${(data.totalPoints / data.scores).toFixed(0)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  table.innerHTML = rows || '<div style="padding: 12px; color: var(--muted);">No audit data available</div>';
+}
+
+
 
 // ============ APPROVAL WORKFLOW ENHANCEMENTS ============
 

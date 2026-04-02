@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "safety:check": "node scripts/admin/prepush-safety-check.mjs"
+  },
   "dependencies": {
     "firebase-admin": "^13.7.0",
     "googleapis": "^144.0.0"

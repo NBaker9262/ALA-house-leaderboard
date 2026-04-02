@@ -14,3 +14,7 @@ scripts/admin/*-adc.json
 *.key.json
 *service-account*.json
 *credentials*.json
+*-firebase-adminsdk-*.json
+*.pem
+*.p12
+ala-house-leaderboard-firebase-adminsdk-fbsvc-a922d97d11.json
