@@ -777,7 +777,11 @@ function formatActionDescription(action) {
 
   if (action.type === "place_awards" && Array.isArray(action.changes)) {
     return `Place awards: ${action.changes
-      .map(change => `${escHtml(findHouseName(change.house))} +${Number(change.delta || 0)} (${escHtml(change.place || "")})`)
+      .map(change => {
+        const delta = Number(change.delta);
+        const safeDelta = Number.isFinite(delta) ? delta : 0;
+        return `${escHtml(findHouseName(change.house))} +${safeDelta} (${escHtml(change.place || "")})`;
+      })
       .join(" · ")}`;
   }
 
