@@ -297,6 +297,15 @@ function showToast(message, tone = "success") {
   }, 3000);
 }
 
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function scoreNumber(source, houseId) {
   const value = Number(source?.[houseId]);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -454,7 +463,7 @@ function renderHistoryList() {
     const commit = commits[i];
     const isCurrent = i === cursor;
     const scoreText = `R:${commit.scores.red} W:${commit.scores.white} B:${commit.scores.blue} S:${commit.scores.silver}`;
-    const authorText = commit.authorEmail ? ` · by ${commit.authorEmail}` : "";
+    const authorText = commit.authorEmail ? ` · by ${escHtml(commit.authorEmail)}` : "";
     const deltaText = commit.summary.startsWith("Checkpoint:") && commit.checkpointDelta
       ? ` · since last save R:${commit.checkpointDelta.red > 0 ? "+" : ""}${commit.checkpointDelta.red} W:${commit.checkpointDelta.white > 0 ? "+" : ""}${commit.checkpointDelta.white} B:${commit.checkpointDelta.blue > 0 ? "+" : ""}${commit.checkpointDelta.blue} S:${commit.checkpointDelta.silver > 0 ? "+" : ""}${commit.checkpointDelta.silver}`
       : "";
@@ -462,7 +471,7 @@ function renderHistoryList() {
     items.push(`
       <li class="history-item">
         <div>
-          <div>${isCurrent ? "<strong>Current</strong> · " : ""}#${commit.id} ${commit.summary}</div>
+          <div>${isCurrent ? "<strong>Current</strong> · " : ""}#${commit.id} ${escHtml(commit.summary)}</div>
           <div class="history-meta">${new Date(commit.createdAtMs).toLocaleString()}${authorText} · ${scoreText}${deltaText}</div>
         </div>
         ${isCurrent ? "" : `<button class=\"btn btn-outline btn-mini\" type=\"button\" data-action-control data-history-index=\"${i}\">Restore</button>`}
@@ -768,24 +777,28 @@ function formatActionDescription(action) {
 
   if (action.type === "place_awards" && Array.isArray(action.changes)) {
     return `Place awards: ${action.changes
-      .map(change => `${findHouseName(change.house)} +${change.delta} (${change.place})`)
+      .map(change => {
+        const delta = Number(change.delta);
+        const safeDelta = Number.isFinite(delta) ? delta : 0;
+        return `${escHtml(findHouseName(change.house))} +${safeDelta} (${escHtml(change.place || "")})`;
+      })
       .join(" · ")}`;
   }
 
   if (action.type === "undo" || action.type === "redo" || action.type === "restore") {
-    return `${action.type.toUpperCase()}: ${action.summary || "snapshot"}${action.authorEmail ? ` (${action.authorEmail})` : ""}`;
+    return `${action.type.toUpperCase()}: ${escHtml(action.summary || "snapshot")}${action.authorEmail ? ` (${escHtml(action.authorEmail)})` : ""}`;
   }
 
   if (action.type === "reset") {
-    return `Reset all scores${action.authorEmail ? ` (${action.authorEmail})` : ""}`;
+    return `Reset all scores${action.authorEmail ? ` (${escHtml(action.authorEmail)})` : ""}`;
   }
 
   if (action.house) {
     const delta = Number(action.delta || 0);
-    return `${findHouseName(action.house)} ${delta > 0 ? "+" : ""}${delta}${action.authorEmail ? ` (${action.authorEmail})` : ""}`;
+    return `${escHtml(findHouseName(action.house))} ${delta > 0 ? "+" : ""}${delta}${action.authorEmail ? ` (${escHtml(action.authorEmail)})` : ""}`;
   }
 
-  return action.summary || "Score update";
+  return escHtml(action.summary || "Score update");
 }
 
 function buildActionKey(action) {
