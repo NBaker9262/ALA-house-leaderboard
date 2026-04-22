@@ -177,7 +177,6 @@ onSnapshot(scoresDoc, snap => {
   lastValues = { ...values };
 
   if (!biggestGain || biggestGain.delta <= 0) return;
-  if (biggestGain.house === lastConfettiHouse && biggestGain.delta < 1) return;
 
   lastConfettiHouse = biggestGain.house;
 
