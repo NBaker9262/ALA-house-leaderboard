@@ -1,1 +1,26 @@
 .vscode/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Logs and local env
+*.log
+.env
+.env.*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Firebase local/emulator state
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Capacitor/Xcode generated local state
+iPhone Sideload App/ios/App/DerivedData/
+iPhone Sideload App/ios/App/build/
+iPhone Sideload App/ios/App/*.xcuserdata/
+iPhone Sideload App/ios/App/App.xcworkspace/xcuserdata/

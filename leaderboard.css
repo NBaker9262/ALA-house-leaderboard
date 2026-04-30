@@ -53,6 +53,13 @@ h1 {
   font-size: clamp(24px, 6.2vw, 108px);
 }
 
+.latest-event {
+  margin: clamp(4px, 1vh, 10px) 0 0;
+  font-size: clamp(12px, 1.5vw, 24px);
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.74);
+}
+
 .chart-area {
   position: relative;
   min-height: 0;

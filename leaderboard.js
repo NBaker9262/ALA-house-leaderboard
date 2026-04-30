@@ -15,6 +15,9 @@ const db = getFirestore(app);
 const scoresDoc = doc(db, "leaderboard", "scores");
 const chartArea = document.querySelector(".chart-area");
 const grid = document.querySelector(".y-grid");
+const latestEventSummary = document.getElementById("latestEventSummary");
+const latestEventLabel = document.getElementById("latestEventLabel");
+const latestEventNet = document.getElementById("latestEventNet");
 
 const bars = {
   red: document.getElementById("bar-red"),
@@ -52,6 +55,23 @@ const EFFECT_TIMING = {
   confettiDelayMs: 0
 };
 const GRID_STEP_POINTS = 100;
+
+function formatSignedDelta(value) {
+  const numeric = Number(value) || 0;
+  return `${numeric > 0 ? "+" : ""}${numeric}`;
+}
+
+function renderLatestEvent(summary) {
+  if (!latestEventSummary || !latestEventLabel || !latestEventNet) return;
+  if (!summary?.label || !summary?.netDelta) {
+    latestEventSummary.hidden = true;
+    return;
+  }
+
+  latestEventSummary.hidden = false;
+  latestEventLabel.textContent = String(summary.label);
+  latestEventNet.textContent = `R:${formatSignedDelta(summary.netDelta.red)} W:${formatSignedDelta(summary.netDelta.white)} B:${formatSignedDelta(summary.netDelta.blue)} S:${formatSignedDelta(summary.netDelta.silver)}`;
+}
 
 function getIconGapPx() {
   const value = getComputedStyle(document.documentElement).getPropertyValue("--icon-gap");
@@ -145,6 +165,7 @@ for (const icon of Object.values(icons)) {
 onSnapshot(scoresDoc, snap => {
   if (!snap.exists()) return;
   const data = snap.data();
+  renderLatestEvent(data.latestEventSummary);
 
   const values = {
     red: Math.max(0, Number(data.red) || 0),

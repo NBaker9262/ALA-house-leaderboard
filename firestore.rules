@@ -1,0 +1,134 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profile() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data
+        : {};
+    }
+
+    function role() {
+      return signedIn()
+        ? (
+            request.auth.token.role != null
+              ? (
+                  request.auth.token.role == "staff" || request.auth.token.role == "helper"
+                    ? "member"
+                    : request.auth.token.role
+                )
+              : (
+                  request.auth.token.superadmin == true
+                    ? "superadmin"
+                    : (
+                        request.auth.token.admin == true
+                          ? "admin"
+                          : (
+                              profile().role == "staff" || profile().role == "helper"
+                                ? "member"
+                                : profile().role
+                            )
+                      )
+                )
+          )
+        : "";
+    }
+
+    function hasRole(roles) {
+      return signedIn() && role() in roles;
+    }
+
+    function can(permission) {
+      return signedIn() && (
+        (role() == "viewer" && permission == "proposePoints") ||
+        (role() != "viewer" && (
+          role() == "superadmin" ||
+          profile().get("permissions", {}).get(permission, false) == true ||
+          (
+            permission in ["scoreEdit", "placeAwards", "studentLookup", "historyAccess", "checkpoint"] &&
+            role() in ["admin", "member"]
+          ) ||
+          (
+            permission in ["approveProposals", "downloadBackup"] &&
+            role() == "admin"
+          ) ||
+          (
+            permission == "proposePoints" &&
+            role() == "admin"
+          )
+        ))
+      );
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /leaderboard/{docId} {
+      allow read: if docId == "scores" || can("historyAccess");
+      allow create, update: if can("scoreEdit") || can("approveProposals") || can("checkpoint");
+      allow delete: if role() == "superadmin";
+
+      match /auditLog/{auditId} {
+        allow read: if can("historyAccess");
+        allow create: if can("scoreEdit") || can("proposePoints") || can("approveProposals");
+        allow update, delete: if false;
+      }
+
+      match /pendingProposals/{proposalId} {
+        allow read: if can("approveProposals") || resource.data.createdByUid == request.auth.uid;
+        allow create: if can("proposePoints") || can("scoreEdit");
+        allow update: if can("approveProposals");
+        allow delete: if can("approveProposals");
+      }
+
+    }
+
+    match /userProfiles/{uid} {
+      allow read: if isOwner(uid) || hasRole(["superadmin", "admin", "member"]);
+      allow create, update: if role() == "superadmin" || can("manageUsers");
+      allow delete: if role() == "superadmin";
+    }
+
+    match /studentDirectory/{studentId} {
+      allow read: if can("studentLookup");
+      allow create, update, delete: if role() == "superadmin" || can("manageUsers");
+    }
+
+    match /eventTags/{tagId} {
+      allow read: if signedIn();
+      allow create, update: if can("manageCatalog") || can("approveProposals");
+      allow delete: if role() == "superadmin";
+    }
+
+    match /eventTagProposals/{proposalId} {
+      allow read, create: if signedIn();
+      allow update, delete: if can("manageCatalog") || can("approveProposals");
+    }
+
+    match /contactMessages/{messageId} {
+      allow create: if signedIn() || (
+        request.resource.data.type == "password_reset_request" &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 254
+      );
+      allow read, update, delete: if role() == "superadmin" || can("manageUsers");
+    }
+
+    match /systemBackups/{backupId} {
+      allow read, create, update, delete: if role() == "superadmin";
+
+      match /{subcollection}/{docId} {
+        allow read, write: if role() == "superadmin";
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
