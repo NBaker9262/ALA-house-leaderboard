@@ -3,10 +3,13 @@ import {
   getFirestore,
   doc,
   getDoc,
+  setDoc,
   collection,
   query,
   where,
   getDocs,
+  addDoc,
+  orderBy,
   limit,
   runTransaction,
   onSnapshot,
@@ -92,6 +95,33 @@ const dom = {
   historyHelpDialog: document.getElementById("historyHelpDialog"),
   historyHelpBackdrop: document.getElementById("historyHelpBackdrop"),
   historyHelpCloseBtn: document.getElementById("historyHelpCloseBtn"),
+  // Sheets sync admin
+  sheetsSyncPanel: document.getElementById("sheetsSyncPanel"),
+  sheetsWebhookInput: document.getElementById("sheetsWebhookInput"),
+  saveSheetsWebhookBtn: document.getElementById("saveSheetsWebhookBtn"),
+  testSheetsWebhookBtn: document.getElementById("testSheetsWebhookBtn"),
+  importFromSheetsBtn: document.getElementById("importFromSheetsBtn"),
+  sheetsWebhookStatus: document.getElementById("sheetsWebhookStatus"),
+  sendQuickEventEmailBtn: document.getElementById("sendQuickEventEmailBtn"),
+  // Notifications
+  notifyFunctionInput: document.getElementById("notifyFunctionInput"),
+  notifyRecipientsInput: document.getElementById("notifyRecipientsInput"),
+  saveNotifyBtn: document.getElementById("saveNotifyBtn"),
+  testNotifyBtn: document.getElementById("testNotifyBtn"),
+  notifyStatus: document.getElementById("notifyStatus"),
+  refreshNotificationsBtn: document.getElementById("refreshNotificationsBtn"),
+  notificationsList: document.getElementById("notificationsList"),
+  // Pending proposals
+  pendingProposalsPanel: document.getElementById("pendingProposalsPanel"),
+  refreshPendingProposalsBtn: document.getElementById("refreshPendingProposalsBtn"),
+  pendingProposalsList: document.getElementById("pendingProposalsList"),
+  // Templates
+  templatesPanel: document.getElementById("templatesPanel"),
+  templateNameInput: document.getElementById("templateNameInput"),
+  templateActionsInput: document.getElementById("templateActionsInput"),
+  saveTemplateBtn: document.getElementById("saveTemplateBtn"),
+  loadTemplatesBtn: document.getElementById("loadTemplatesBtn"),
+  templatesList: document.getElementById("templatesList"),
   
 };
 
@@ -102,6 +132,7 @@ let currentAudit = { entries: [], nextId: 1 };
 let lastLoggedActionKey = null;
 let pendingWrites = 0;
 let currentUserEmail = "";
+let currentUserUid = "";
 let shouldWarnBeforeLeave = false;
 const expandedEventWindows = new Set();
 const expandedEventGames = new Set();
@@ -118,6 +149,41 @@ function roleFromClaims(claims = {}) {
   if (claims.role === "member" || claims.role === "staff" || claims.role === "helper") return "member";
   if (claims.role === "viewer") return "viewer";
   return "";
+}
+
+function getCurrentRole() {
+  try {
+    if (typeof window !== 'undefined' && window.currentRole) return String(window.currentRole || "");
+    const cls = (document && document.body && document.body.className) || "";
+    const m = String(cls).match(/role-([a-z]+)/);
+    return m ? m[1] : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function can(permission) {
+  const role = getCurrentRole();
+  const perms = {
+    superadmin: { historyAccess: true, approveProposals: true, proposePoints: true, manageTemplates: true, rollback: true, manageSettings: true },
+    admin: { historyAccess: true, approveProposals: true, proposePoints: true, manageTemplates: true, rollback: true, manageSettings: true },
+    member: { historyAccess: true, approveProposals: false, proposePoints: true, manageTemplates: false, rollback: false, manageSettings: false },
+    viewer: { historyAccess: false, approveProposals: false, proposePoints: false, manageTemplates: false, rollback: false, manageSettings: false }
+  };
+  return !!(perms[role] && perms[role][permission]);
+}
+
+function requireRole(roles, message = 'You do not have permission to perform this action.') {
+  const role = getCurrentRole();
+  if (!roles.includes(role)) {
+    try { showToast(message, 'warn'); } catch (e) { /* showToast may not be available yet */ }
+    return false;
+  }
+  return true;
+}
+
+function requireAdmin() {
+  return requireRole(['admin', 'superadmin'], 'Admin-only action.');
 }
 
 async function roleFromProfile(user) {
@@ -658,8 +724,8 @@ function updateSmartEventControls() {
   const open = isEventOpen();
   const legacy = findLegacyPreCheckpoint(currentHistory);
 
-  dom.checkpointPreBtn.classList.toggle("is-hidden", open);
-  dom.checkpointPostBtn.classList.toggle("is-hidden", !open);
+  dom.checkpointPreBtn?.classList.toggle("is-hidden", open);
+  dom.checkpointPostBtn?.classList.toggle("is-hidden", !open);
   dom.undoEventActionBtn?.classList.toggle("is-hidden", !open);
   dom.eventItemRow?.classList.toggle("is-hidden", !open);
   dom.eventItemHint?.classList.toggle("is-hidden", !open);
@@ -669,13 +735,15 @@ function updateSmartEventControls() {
     dom.checkpointLegacyBtn.hidden = open || !legacy;
   }
 
-  if (open && currentHistory.openEventWindow?.eventName) {
-    dom.checkpointName.value = currentHistory.openEventWindow.eventName;
-    dom.checkpointName.readOnly = true;
-    dom.checkpointName.placeholder = "Event is running";
-  } else {
-    dom.checkpointName.readOnly = false;
-    dom.checkpointName.placeholder = "Event name (example: Spring Sports Assembly)";
+  if (dom.checkpointName) {
+    if (open && currentHistory.openEventWindow?.eventName) {
+      dom.checkpointName.value = currentHistory.openEventWindow.eventName;
+      dom.checkpointName.readOnly = true;
+      dom.checkpointName.placeholder = "Event is running";
+    } else {
+      dom.checkpointName.readOnly = false;
+      dom.checkpointName.placeholder = "Event name (example: Spring Sports Assembly)";
+    }
   }
 
   if (!dom.eventActionHint) return;
@@ -1332,6 +1400,520 @@ async function commitWithHistory({ summary, actionMeta, buildScores, authorEmail
   return write;
 }
 
+// --- Google Sheets webhook config and sync ---
+async function loadSheetsConfig() {
+  try {
+    const cfgRef = doc(db, "leaderboard", "config");
+    const snap = await getDoc(cfgRef);
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      const url = String(data.sheetsWebhookUrl || "").trim();
+      window._sheetsWebhookUrl = url;
+      if (dom.sheetsWebhookInput) dom.sheetsWebhookInput.value = url;
+      if (dom.sheetsWebhookStatus) dom.sheetsWebhookStatus.textContent = url ? "Configured" : "Not configured.";
+      // Notifications config
+      const notifyUrl = String(data.notifyFunctionUrl || data.notifyUrl || "").trim();
+      const recipients = String(data.notificationRecipients || data.notifyRecipients || "").trim();
+      if (dom.notifyFunctionInput) dom.notifyFunctionInput.value = notifyUrl;
+      if (dom.notifyRecipientsInput) dom.notifyRecipientsInput.value = recipients;
+      if (dom.notifyStatus) dom.notifyStatus.textContent = notifyUrl || recipients ? "Configured" : "Not configured.";
+    }
+  } catch (e) {
+    console.error("loadSheetsConfig", e);
+  }
+}
+
+async function saveSheetsConfig() {
+  const url = String(dom.sheetsWebhookInput?.value || "").trim();
+  try {
+    await setDoc(doc(db, "leaderboard", "config"), { sheetsWebhookUrl: url }, { merge: true });
+    window._sheetsWebhookUrl = url;
+    if (dom.sheetsWebhookStatus) dom.sheetsWebhookStatus.textContent = "Saved";
+    showToast("Sheets webhook saved.", "success");
+  } catch (e) {
+    console.error("saveSheetsConfig", e);
+    showToast("Failed to save webhook.", "warn");
+  }
+}
+
+async function testSheetsWebhook() {
+  const url = String(dom.sheetsWebhookInput?.value || window._sheetsWebhookUrl || "").trim();
+  if (!url) {
+    showToast("No webhook URL configured.", "warn");
+    return;
+  }
+  try {
+    const payload = { type: 'test', summary: 'Sheets webhook test', message: `Test for URL: ${url}`, timestamp: Date.now() };
+    // Try external POST first
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), mode: 'cors' });
+      if (r.ok) {
+        showToast('Sheets webhook test sent (external).', 'success');
+        return;
+      }
+      console.warn('sheets test webhook returned', r.status);
+    } catch (e) {
+      console.warn('sheets webhook external test failed', e);
+    }
+
+    // Fallback to internal notification store
+    await postNotification({ type: 'test', summary: 'Sheets webhook test (fallback)', message: `Test for URL: ${url}`, payload: { timestamp: Date.now() } });
+    showToast('Posted internal test notification for Sheets webhook (fallback).', 'success');
+  } catch (e) {
+    console.error('testSheetsWebhook', e);
+    showToast('Test failed.', 'warn');
+  }
+}
+
+async function pullFromSheets() {
+  if (!requireAdmin()) return;
+  const url = String(dom.sheetsWebhookInput?.value || window._sheetsWebhookUrl || "").trim();
+  if (!url) {
+    showToast("No webhook URL configured.", "warn");
+    return;
+  }
+
+  try {
+    const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=export';
+    const r = await fetch(fetchUrl, { method: 'GET', headers: { 'Accept': 'application/json' }, mode: 'cors' });
+    if (!r.ok) {
+      console.warn('pullFromSheets fetch failed', r.status);
+      showToast('Failed to fetch from Sheets webhook.', 'warn');
+      return;
+    }
+    let data = await r.json();
+    if (!Array.isArray(data)) {
+      if (data && Array.isArray(data.items)) {
+        data = data.items;
+      } else {
+        console.warn('Unexpected response from sheets export', data);
+        showToast('Unexpected response from Sheets webhook.', 'warn');
+        return;
+      }
+    }
+
+    const count = data.length;
+    if (count === 0) { showToast('No items to import from Sheets.', 'info'); return; }
+
+    const confirmed = window.confirm(`Import ${count} item(s) from Sheets as drafts? Admin-only action.`);
+    if (!confirmed) return;
+
+    let imported = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      const item = data[i];
+      try {
+        await addDoc(collection(db, 'eventDrafts'), {
+          importedFromSheets: true,
+          payload: item,
+          createdAtMs: Date.now(),
+          createdByEmail: currentUserEmail || ''
+        });
+        imported += 1;
+      } catch (e) {
+        console.error('pullFromSheets addDoc error', e);
+      }
+    }
+
+    showToast(`Imported ${imported}/${count} items as drafts.`, 'success');
+    try { if (dom.refreshPendingProposalsBtn) void loadPendingProposals(); } catch (e) { /* ignore */ }
+  } catch (e) {
+    console.error('pullFromSheets', e);
+    showToast('Failed to import from Sheets.', 'warn');
+  }
+}
+
+// --- Internal notifications (stored in Firestore) ---
+async function postNotification({ type = 'info', summary = '', message = '', payload = {} } = {}) {
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      type,
+      summary,
+      message,
+      payload,
+      createdAtMs: Date.now(),
+      createdByEmail: currentUserEmail || ''
+    });
+    if (dom.notifyStatus) dom.notifyStatus.textContent = 'Notification posted';
+    return true;
+  } catch (e) {
+    console.error('postNotification', e);
+    try {
+      const key = 'ala_notifications_local_v1';
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      arr.unshift({ id: `local-${Date.now()}`, type, summary, message, payload, createdAtMs: Date.now(), createdByEmail: currentUserEmail || '' });
+      localStorage.setItem(key, JSON.stringify(arr.slice(0, 1000)));
+      if (dom.notifyStatus) dom.notifyStatus.textContent = 'Notification saved locally';
+      return true;
+    } catch (le) {
+      console.error('postNotification local fallback failed', le);
+      return false;
+    }
+  }
+}
+
+async function loadNotifications(limitCount = 50) {
+  try {
+    const q = query(collection(db, 'notifications'), orderBy('createdAtMs', 'desc'), limit(limitCount));
+    const snaps = await getDocs(q);
+    const items = snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderNotifications(items);
+  } catch (e) {
+    console.error('loadNotifications', e);
+    try {
+      const key = 'ala_notifications_local_v1';
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      renderNotifications(arr.slice(0, 50));
+    } catch (le) {
+      console.error('loadNotifications local fallback failed', le);
+    }
+  }
+}
+
+function renderNotifications(items) {
+  const container = dom.notificationsList;
+  if (!container) return;
+  if (!items || items.length === 0) {
+    container.innerHTML = '<li class="log-empty">No notifications.</li>';
+    return;
+  }
+  container.innerHTML = items.map(n => {
+    const time = new Date(Number(n.createdAtMs || Date.now())).toLocaleString();
+    const summary = String(n.summary || n.message || '').replace(/</g, '&lt;');
+    const by = String(n.createdByEmail || '');
+    return `<li class="notification-item"><div><strong>${summary}</strong> <span class="muted">${time}${by ? ' · by ' + by : ''}</span></div></li>`;
+  }).join('');
+}
+
+// --- Notifications config ---
+async function saveNotifyConfig() {
+  const url = String(dom.notifyFunctionInput?.value || "").trim();
+  const recipients = String(dom.notifyRecipientsInput?.value || "").trim();
+  try {
+    await setDoc(doc(db, "leaderboard", "config"), { notifyFunctionUrl: url, notificationRecipients: recipients }, { merge: true });
+    if (dom.notifyStatus) dom.notifyStatus.textContent = "Saved";
+    showToast("Notification settings saved.", "success");
+  } catch (e) {
+    console.error("saveNotifyConfig", e);
+    showToast("Failed to save notification settings.", "warn");
+  }
+}
+
+// ============ Server-side Draft Sync ============
+let draftUnsubscribe = null;
+async function saveDraftToServer(draft) {
+  try {
+    if (!currentUserUid) throw new Error('not-signed-in');
+    const ref = doc(db, 'eventDrafts', currentUserUid);
+    const payload = {
+      notes: String(draft.notes || ''),
+      tags: Array.isArray(draft.tags) ? draft.tags : [],
+      eventName: String(draft.eventName || ''),
+      savedAtMs: Number(draft.savedAt || Date.now()),
+      updatedBy: currentUserUid,
+      updatedAtMs: Date.now()
+    };
+    await setDoc(ref, payload, { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('saveDraftToServer failed', e);
+    return false;
+  }
+}
+
+function watchServerDrafts() {
+  try {
+    if (!currentUserUid) return;
+    const ref = doc(db, 'eventDrafts', currentUserUid);
+    if (draftUnsubscribe) draftUnsubscribe();
+    draftUnsubscribe = onSnapshot(ref, snap => {
+      if (!snap.exists()) return;
+      try {
+        const data = snap.data() || {};
+        const local = getStoredDraft();
+        const serverNotes = String(data.notes || '').trim();
+        const localNotes = String(local?.notes || '').trim();
+        const serverTagsStr = JSON.stringify(data.tags || []);
+        const localTagsStr = JSON.stringify(local?.tags || []);
+        
+        // If server draft is newer than local AND differs, restore it
+        if (data.updatedAtMs && (!local || data.updatedAtMs > (local.savedAt || 0))) {
+          if (serverNotes !== localNotes || serverTagsStr !== localTagsStr) {
+            if (data.notes !== undefined && document.getElementById('notesInput')) {
+              document.getElementById('notesInput').value = data.notes;
+            }
+            if (Array.isArray(data.tags)) {
+              selectedTags = data.tags.map(t => titleCaseLabel(normalizeTagKey(t))).filter(Boolean);
+              renderSelectedTags();
+            }
+            // Update local so we don't keep restoring it
+            const payload = { notes: data.notes || '', tags: selectedTags.slice(), savedAt: data.updatedAtMs, eventName: data.eventName || '' };
+            localStorage.setItem("ala_event_draft_v1", JSON.stringify(payload));
+            showToast('Draft updated from another device.', 'info');
+          }
+        }
+      } catch (e) {
+        console.warn('watchServerDrafts callback error', e);
+      }
+    }, err => {
+      console.warn('watchServerDrafts snapshot error', err);
+    });
+  } catch (e) {
+    console.warn('watchServerDrafts failed', e);
+  }
+}
+
+function stopWatchingServerDrafts() {
+  try {
+    if (draftUnsubscribe) {
+      draftUnsubscribe();
+      draftUnsubscribe = null;
+    }
+  } catch (e) {
+    console.warn('stopWatchingServerDrafts failed', e);
+  }
+}
+
+// ============ Sheets webhook sender (external POST) ============
+async function sendEventSummaryToSheetsWebhook(payload = {}) {
+  try {
+    const url = String(window._sheetsWebhookUrl || (dom.sheetsWebhookInput?.value || '')).trim();
+    if (!url) {
+      return false;
+    }
+
+    // attempt POST with JSON payload
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      mode: 'cors'
+    });
+
+    if (!resp.ok) {
+      console.warn('sheets webhook returned non-OK', resp.status);
+      return false;
+    }
+
+    showToast('Sent event summary to Sheets webhook.', 'success');
+    return true;
+  } catch (e) {
+    console.warn('sendEventSummaryToSheetsWebhook failed', e);
+    // fallback: post internal notification
+    try { await postNotification({ type: 'sheets_fallback', summary: 'Sheets webhook failed', message: e.message || String(e), payload }); } catch (_) {}
+    return false;
+  }
+}
+
+async function testNotifyFunction() {
+  const url = String(dom.notifyFunctionInput?.value || window._sheetsWebhookUrl || "").trim();
+  const recipients = (String(dom.notifyRecipientsInput?.value || "").split(',').map(s => s.trim()).filter(Boolean));
+  if (!url) { showToast('No notify endpoint configured.', 'warn'); return; }
+  try {
+    // Internal-only: create a notification instead of calling an external email endpoint
+    await postNotification({ type: 'test_notify', summary: 'Notification test', message: `Test notify configured for ${recipients.join(', ')}`, payload: { timestamp: Date.now() } });
+    showToast('Posted internal test notification.', 'success');
+  } catch (e) {
+    console.error('testNotifyFunction', e);
+    showToast('Notify test failed.', 'warn');
+  }
+}
+
+// --- Pending proposals ---
+async function loadPendingProposals() {
+  try {
+    const col = collection(db, 'pendingProposals');
+    const snaps = await getDocs(col);
+    const items = [];
+    snaps.forEach(d => {
+      const p = d.data() || {};
+      p.id = d.id;
+      items.push(p);
+    });
+    renderPendingProposals(items.filter(i => (i.status || 'pending') === 'pending'));
+  } catch (e) {
+    console.error('loadPendingProposals', e);
+    showToast('Unable to load proposals.', 'warn');
+  }
+}
+
+function renderPendingProposals(items) {
+  const container = dom.pendingProposalsList;
+  if (!container) return;
+  if (!items || items.length === 0) {
+    container.innerHTML = '<li class="log-empty">No pending proposals.</li>';
+    return;
+  }
+  container.innerHTML = items.map(p => {
+    const title = String(p.title || p.summary || '').replace(/</g, '&lt;');
+    const by = String(p.proposerEmail || p.author || '');
+    const id = String(p.id || '');
+    return `<li class="proposal-item"><div><strong>${title}</strong> <span class="muted">by ${by}</span></div><div style="margin-top:6px"><button data-proposal-id="${id}" data-proposal-action="approve" class="btn btn-primary btn-mini">Approve</button> <button data-proposal-id="${id}" data-proposal-action="reject" class="btn btn-ghost btn-mini">Reject</button></div></li>`;
+  }).join('\n');
+}
+
+dom.pendingProposalsList?.addEventListener('click', event => {
+  const btn = event.target.closest('button[data-proposal-id]');
+  if (!btn) return;
+  const id = btn.dataset.proposalId;
+  const action = btn.dataset.proposalAction;
+  if (action === 'approve') void approveProposal(id);
+  if (action === 'reject') void rejectProposal(id);
+});
+
+async function approveProposal(id) {
+  if (!id) return;
+  if (!requireAdmin()) return;
+  try {
+    await setDoc(doc(db, 'pendingProposals', id), { status: 'approved', resolvedBy: currentUserEmail, resolvedAt: serverTimestamp() }, { merge: true });
+    // write an audit entry to leaderboard/scores
+    await runTransaction(db, async transaction => {
+      const snap = await transaction.get(scoresDoc);
+      const data = snap.exists() ? snap.data() : {};
+      const auditBefore = readAuditState(data);
+      const next = appendAuditEntry(auditBefore, { editorEmail: currentUserEmail, actionType: 'proposal_approved', summary: `Approved proposal ${id}`, details: { proposalId: id }, beforeScores: scoresFromDoc(data), afterScores: scoresFromDoc(data) });
+      const updates = {};
+      writeAuditState(updates, next);
+      if (snap.exists()) transaction.update(scoresDoc, updates); else transaction.set(scoresDoc, updates, { merge: true });
+    });
+    showToast('Proposal approved.', 'success');
+    void loadPendingProposals();
+  } catch (e) {
+    console.error('approveProposal', e);
+    showToast('Unable to approve proposal.', 'warn');
+  }
+}
+
+async function rejectProposal(id) {
+  if (!id) return;
+  if (!requireAdmin()) return;
+  try {
+    await setDoc(doc(db, 'pendingProposals', id), { status: 'rejected', resolvedBy: currentUserEmail, resolvedAt: serverTimestamp() }, { merge: true });
+    await runTransaction(db, async transaction => {
+      const snap = await transaction.get(scoresDoc);
+      const data = snap.exists() ? snap.data() : {};
+      const auditBefore = readAuditState(data);
+      const next = appendAuditEntry(auditBefore, { editorEmail: currentUserEmail, actionType: 'proposal_rejected', summary: `Rejected proposal ${id}`, details: { proposalId: id }, beforeScores: scoresFromDoc(data), afterScores: scoresFromDoc(data) });
+      const updates = {};
+      writeAuditState(updates, next);
+      if (snap.exists()) transaction.update(scoresDoc, updates); else transaction.set(scoresDoc, updates, { merge: true });
+    });
+    showToast('Proposal rejected.', 'info');
+    void loadPendingProposals();
+  } catch (e) {
+    console.error('rejectProposal', e);
+    showToast('Unable to reject proposal.', 'warn');
+  }
+}
+
+// --- Templates (localStorage-backed simple template library) ---
+function _readTemplatesStorage() {
+  try {
+    const raw = localStorage.getItem('ala_templates_v1');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('readTemplates', e);
+    return [];
+  }
+}
+
+function _writeTemplatesStorage(list) {
+  try {
+    localStorage.setItem('ala_templates_v1', JSON.stringify(list || []));
+  } catch (e) {
+    console.error('writeTemplates', e);
+  }
+}
+
+function renderTemplatesList() {
+  const container = dom.templatesList;
+  if (!container) return;
+  const items = _readTemplatesStorage();
+  if (!items || !items.length) {
+    container.innerHTML = '<li class="log-empty">No templates saved.</li>';
+    return;
+  }
+  container.innerHTML = items.map(t => {
+    const short = String(t.name || '').replace(/</g, '&lt;');
+    return `<li class="template-item"><div><strong>${short}</strong> <span class="muted">${(t.actions && t.actions.length) || 0} action(s)</span></div><div style="margin-top:6px"><button data-template-id="${t.id}" data-template-action="apply" class="btn btn-primary btn-mini">Apply</button> <button data-template-id="${t.id}" data-template-action="delete" class="btn btn-ghost btn-mini">Delete</button></div></li>`;
+  }).join('');
+}
+
+function loadTemplates() {
+  try {
+    renderTemplatesList();
+    showToast('Templates refreshed.', 'info');
+  } catch (e) {
+    console.error('loadTemplates', e);
+    showToast('Unable to load templates.', 'warn');
+  }
+}
+
+async function saveTemplateFromInputs() {
+  if (!dom.templateNameInput || !dom.templateActionsInput) return;
+  const name = String(dom.templateNameInput.value || '').trim();
+  const raw = String(dom.templateActionsInput.value || '').trim();
+  if (!name || !raw) { showToast('Enter a name and JSON actions.', 'warn'); return; }
+  let actions = null;
+  try { actions = JSON.parse(raw); } catch (e) { showToast('Invalid JSON for actions.', 'warn'); return; }
+  if (!Array.isArray(actions)) { showToast('Actions must be a JSON array.', 'warn'); return; }
+
+  const list = _readTemplatesStorage();
+  const item = { id: `tpl-${Date.now()}`, name, actions };
+  list.unshift(item);
+  _writeTemplatesStorage(list.slice(0, 200));
+  renderTemplatesList();
+  showToast('Template saved.', 'success');
+}
+
+async function applyTemplateById(id) {
+  if (!id) return;
+  if (!requireAdmin()) return;
+  const list = _readTemplatesStorage();
+  const tpl = list.find(t => t.id === id);
+  if (!tpl) { showToast('Template not found.', 'warn'); return; }
+
+  const confirmed = window.confirm(`Are you sure you want to apply template "${tpl.name}"?`);
+  if (!confirmed) return;
+
+  const summary = `Template: ${tpl.name}`;
+
+  const write = await commitWithHistory({
+    summary,
+    actionMeta: { type: 'template_apply', templateId: tpl.id, templateName: tpl.name },
+    extrasBuilder: () => ({ notes: '', tags: [] }),
+    buildScores: current => {
+      const next = { ...current };
+      try {
+        for (const a of tpl.actions) {
+          if (!a || !a.type) continue;
+          if (a.type === 'delta' && a.house && Number.isFinite(Number(a.delta))) {
+            next[a.house] = Math.max(0, scoreNumber(next, a.house) + Number(a.delta));
+          }
+          if (a.type === 'place_awards' && Array.isArray(a.changes)) {
+            a.changes.forEach(ch => { if (ch.house && Number.isFinite(Number(ch.delta))) { next[ch.house] = Math.max(0, scoreNumber(next, ch.house) + Number(ch.delta)); } });
+          }
+        }
+      } catch (e) { console.error('applyTemplate buildScores', e); }
+      return next;
+    }
+  });
+
+  if (!write.ok) { showToast('Failed to apply template.', 'warn'); return; }
+  showToast(`Applied template: ${tpl.name}`, 'success');
+}
+
+function deleteTemplateById(id) {
+  if (!id) return;
+  const list = _readTemplatesStorage();
+  const next = list.filter(t => t.id !== id);
+  _writeTemplatesStorage(next);
+  renderTemplatesList();
+  showToast('Template deleted.', 'info');
+}
+
+
 async function applyDelta(house, delta) {
   if (!Number.isFinite(delta) || delta === 0) return;
   if (!ensureEventOpenForPoints()) return;
@@ -1343,6 +1925,7 @@ async function applyDelta(house, delta) {
   const write = await commitWithHistory({
     summary: itemName ? `${itemName}: ${summary}` : summary,
     actionMeta: { type: "delta", house, delta, eventItemName: itemName || "" },
+    extrasBuilder: () => ({ tags: selectedTags.slice(), notes: (document.getElementById("notesInput")?.value || "").trim() }),
     buildScores: current => ({
       ...current,
       [house]: Math.max(0, current[house] + delta)
@@ -1403,6 +1986,7 @@ async function applyPlaceAwards() {
       eventItemName: itemName || "",
       changes: placements.map(entry => ({ house: entry.house, delta: entry.points, place: entry.badge }))
     },
+    extrasBuilder: () => ({ tags: selectedTags.slice(), notes: (document.getElementById("notesInput")?.value || "").trim() }),
     buildScores: current => {
       const next = { ...current };
       placements.forEach(entry => {
@@ -1441,6 +2025,7 @@ function clearPlaceSelections() {
 }
 
 async function moveHistoryCursor(direction) {
+  if (!requireAdmin()) return;
   const actionType = direction < 0 ? "undo" : "redo";
   const write = await withWrite(async () => commitScoreMutation(data => {
     const history = readHistoryState(data);
@@ -1477,7 +2062,13 @@ async function moveHistoryCursor(direction) {
   showToast(`${actionType === "undo" ? "Undid" : "Redid"}: ${write.value.summary}`, "info");
 }
 
-async function restoreHistoryIndex(index) {
+async function restoreHistoryIndex(index, skipConfirm = false) {
+  if (!requireAdmin()) return;
+  if (!skipConfirm) {
+    const confirmed = window.confirm("Confirm restore to selected snapshot? Admin-only action.");
+    if (!confirmed) return;
+  }
+
   const write = await withWrite(async () => commitScoreMutation(data => {
     const history = readHistoryState(data);
     if (!Number.isInteger(index) || index < 0 || index >= history.commits.length) {
@@ -1512,7 +2103,8 @@ async function restoreHistoryIndex(index) {
 }
 
 async function resetScores() {
-  const confirmed = window.confirm("Reset all house scores to zero?");
+  if (!requireAdmin()) return;
+  const confirmed = window.confirm("Reset all house scores to zero? Admin-only action.\nThis will create a new commit and cannot be trivially undone.");
   if (!confirmed) return;
 
   const write = await commitWithHistory({
@@ -1690,6 +2282,7 @@ async function closeMostRecentLegacyPre() {
 }
 
 async function undoLastEventAction() {
+  if (!requireAdmin()) return;
   const openEvent = currentHistory.openEventWindow;
   if (!openEvent?.id) {
     showToast("No open event to undo from.", "warn");
@@ -1711,11 +2304,15 @@ async function undoLastEventAction() {
     return;
   }
 
+  const confirmed = window.confirm("Undo last event action? This will restore the snapshot to the previous commit. Admin-only action.");
+  if (!confirmed) return;
+
   const targetIndex = Math.max(0, actionIndex - 1);
-  await restoreHistoryIndex(targetIndex);
+  await restoreHistoryIndex(targetIndex, true);
 }
 
 async function renameEventByName(oldNameInput, newNameInput) {
+  if (!requireAdmin()) return;
   const oldName = titleCaseLabel(normalizeEventLabelKey(oldNameInput || "")).slice(0, 60);
   const newName = titleCaseLabel(normalizeEventLabelKey(newNameInput || "")).slice(0, 60);
   if (!oldName || !newName) {
@@ -1780,6 +2377,7 @@ async function renameEventByName(oldNameInput, newNameInput) {
 }
 
 async function deleteEventByName(eventNameInput) {
+  if (!requireAdmin()) return;
   const eventName = titleCaseLabel(normalizeEventLabelKey(eventNameInput || "")).slice(0, 60);
   if (!eventName) {
     showToast("Enter an event name to delete.", "warn");
@@ -1835,6 +2433,7 @@ async function deleteEventByName(eventNameInput) {
 }
 
 async function renameGameLabel(oldLabelInput, newLabelInput, eventWindowId = "") {
+  if (!requireAdmin()) return;
   const oldLabelKey = normalizeEventLabelKey(oldLabelInput || "");
   const oldLabel = titleCaseLabel(oldLabelKey).slice(0, 40);
   const newLabel = titleCaseLabel(normalizeEventLabelKey(newLabelInput || "")).slice(0, 40);
@@ -1896,6 +2495,7 @@ async function renameGameLabel(oldLabelInput, newLabelInput, eventWindowId = "")
 }
 
 async function deleteGameLabelPrefix(oldLabelInput, eventWindowId = "") {
+  if (!requireAdmin()) return;
   const oldLabel = titleCaseLabel(normalizeEventLabelKey(oldLabelInput || "")).slice(0, 40);
   if (!oldLabel) {
     showToast("Enter a game label to remove.", "warn");
@@ -2094,7 +2694,10 @@ async function createPostEventCheckpoint() {
         label: openEvent.eventName,
         closedAtMs: Date.now(),
         actionCount,
-        netDelta
+        netDelta,
+        tags: selectedTags.slice(),
+        notes: (document.getElementById("notesInput")?.value || "").trim(),
+        closedByEmail: currentUserEmail
       }
     };
 
@@ -2122,6 +2725,33 @@ async function createPostEventCheckpoint() {
       : `Post checkpoint created for ${write.value.eventName}.`,
     "success"
   );
+  // Post an internal notification for admins (non-blocking)
+  try {
+    const snap = await getDoc(scoresDoc);
+    const data = snap.exists() ? snap.data() : {};
+    const latest = data?.latestEventSummary || {};
+    const payload = {
+      eventName: latest.label || write.value.eventName,
+      closedAtMs: latest.closedAtMs || Date.now(),
+      actionCount: latest.actionCount || null,
+      netDelta: latest.netDelta || null,
+      tags: latest.tags || selectedTags.slice(),
+      notes: latest.notes || (document.getElementById("notesInput")?.value || "").trim(),
+      closedByEmail: latest.closedByEmail || currentUserEmail
+    };
+    await postNotification({ type: 'event_closed', summary: `Event closed: ${payload.eventName}`, message: `Closed by ${payload.closedByEmail}`, payload });
+    if (dom.notificationsList) void loadNotifications();
+  } catch (e) {
+    console.warn("notification store attempt failed", e);
+  }
+  // Attempt to forward closed-event summary to configured Sheets webhook (best-effort)
+  try {
+    if (window._sheetsWebhookUrl) {
+      void sendEventSummaryToSheetsWebhook(payload);
+    }
+  } catch (e) {
+    console.warn('sheets webhook send attempt failed', e);
+  }
 }
 
 dom.loginForm.addEventListener("submit", async event => {
@@ -2213,6 +2843,43 @@ dom.checkpointName.addEventListener("keydown", event => {
 });
 dom.checkpointName.addEventListener("input", () => {
   updateLeaveWarningState();
+});
+// Sheets webhook UI
+dom.saveSheetsWebhookBtn?.addEventListener("click", () => { void saveSheetsConfig(); });
+dom.testSheetsWebhookBtn?.addEventListener("click", () => { void testSheetsWebhook(); });
+dom.importFromSheetsBtn?.addEventListener("click", () => { void pullFromSheets(); });
+// Notifications UI
+dom.saveNotifyBtn?.addEventListener('click', () => { void saveNotifyConfig(); });
+dom.testNotifyBtn?.addEventListener('click', () => { void testNotifyFunction(); });
+dom.refreshNotificationsBtn?.addEventListener('click', () => { void loadNotifications(); });
+// Pending proposals
+dom.refreshPendingProposalsBtn?.addEventListener('click', () => { void loadPendingProposals(); });
+// Quick notification action (internal only)
+dom.sendQuickEventEmailBtn?.addEventListener("click", async () => {
+  try {
+    const snap = await getDoc(scoresDoc);
+    const data = snap.exists() ? snap.data() : {};
+    const latest = data?.latestEventSummary || {};
+    const summary = `Event closed: ${latest.label || 'Unknown'}`;
+    const message = `Event ${latest.label || 'Unknown'} closed by ${latest.closedByEmail || currentUserEmail}. Actions: ${latest.actionCount || 0}. Notes: ${latest.notes || ''}`;
+    await postNotification({ type: 'event_summary', summary, message, payload: latest });
+    if (dom.notificationsList) void loadNotifications();
+    showToast('Posted notification for admins.', 'success');
+  } catch (e) {
+    console.error('quick notification', e);
+    showToast('Unable to post notification.', 'warn');
+  }
+});
+// Templates UI wiring
+dom.saveTemplateBtn?.addEventListener('click', () => { void saveTemplateFromInputs(); });
+dom.loadTemplatesBtn?.addEventListener('click', () => { try { loadTemplates(); } catch(e){ console.error(e); } });
+dom.templatesList?.addEventListener('click', event => {
+  const btn = event.target.closest('button[data-template-id]');
+  if (!btn) return;
+  const id = String(btn.dataset.templateId || '');
+  const action = String(btn.dataset.templateAction || '');
+  if (action === 'apply') void applyTemplateById(id);
+  if (action === 'delete') void deleteTemplateById(id);
 });
 dom.historyList.addEventListener("click", event => {
   const target = event.target;
@@ -2342,6 +3009,7 @@ onSnapshot(
 
     currentScores = values;
     setSyncStatus(`Live • Updated ${formatClock()}`, "live");
+    try { updateTagSuggestions(""); } catch (e) { /* ignore if not initialized */ }
   },
   error => {
     console.error(error);
@@ -2354,6 +3022,9 @@ onAuthStateChanged(auth, async user => {
     dom.loginBox.style.display = "grid";
     dom.mainPanel.style.display = "none";
     dom.passwordInput.value = "";
+    // stop server-side draft sync when signed out
+    try { stopWatchingServerDrafts(); } catch (e) { /* ignore */ }
+    currentUserUid = "";
     return;
   }
 
@@ -2371,14 +3042,425 @@ onAuthStateChanged(auth, async user => {
     dom.loginBox.style.display = "none";
     dom.mainPanel.style.display = "block";
     currentUserEmail = user.email || "";
+    currentUserUid = user.uid || "";
     dom.loggedInAs.textContent = `${currentUserEmail} (${role})`;
+    // expose current role for legacy inline scripts
+    try {
+      window.currentRole = role;
+      document.body.classList.remove('role-member','role-viewer','role-admin','role-superadmin');
+      if (role) document.body.classList.add(`role-${role}`);
+    } catch (e) {}
+    // Toggle admin-only UI elements
+    try {
+      const isAdmin = role === 'admin' || role === 'superadmin';
+      if (!isAdmin) {
+        dom.resetBtn?.setAttribute('hidden', '');
+        dom.undoBtn?.setAttribute('hidden', '');
+        dom.redoBtn?.setAttribute('hidden', '');
+        dom.undoEventActionBtn?.setAttribute('hidden', '');
+        dom.sheetsSyncPanel?.setAttribute('hidden', '');
+        dom.pendingProposalsPanel?.setAttribute('hidden', '');
+        dom.notifyFunctionInput?.setAttribute('hidden', '');
+        dom.saveNotifyBtn?.setAttribute('hidden', '');
+      } else {
+        dom.resetBtn?.removeAttribute('hidden');
+        dom.undoBtn?.removeAttribute('hidden');
+        dom.redoBtn?.removeAttribute('hidden');
+        dom.undoEventActionBtn?.removeAttribute('hidden');
+        dom.sheetsSyncPanel?.removeAttribute('hidden');
+        dom.pendingProposalsPanel?.removeAttribute('hidden');
+        dom.notifyFunctionInput?.removeAttribute('hidden');
+        dom.saveNotifyBtn?.removeAttribute('hidden');
+      }
+    } catch (e) { /* ignore UI toggle errors */ }
     updateLeaveWarningState();
+    void loadSheetsConfig();
+    // Start watching server-side drafts for this user (multi-device resume)
+    try { void watchServerDrafts(); } catch (e) { console.warn('watchServerDrafts start failed', e); }
+    void loadTemplates();
+    if (role === 'admin' || role === 'superadmin') {
+      void loadPendingProposals();
+      void loadNotifications();
+    }
   } catch (error) {
     console.error(error);
     await signOut(auth);
     setAuthError("Unable to verify account permissions.");
   }
 });
+
+// --- Tag UI, keyword-matching suggestions, and autosave for event panel ---
+let selectedTags = [];
+let tagAutosaveTimer = null;
+
+
+function getStoredDraft() {
+  try {
+    const raw = localStorage.getItem("ala_event_draft_v1");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveDraftNow() {
+  try {
+    const notes = (document.getElementById("notesInput")?.value || "").trim();
+    const payload = { notes, tags: selectedTags.slice(), savedAt: Date.now(), eventName: currentHistory.openEventWindow?.eventName || "" };
+    localStorage.setItem("ala_event_draft_v1", JSON.stringify(payload));
+
+    // If signed in, attempt to persist draft server-side for multi-device resume
+    try {
+      if (currentUserUid) {
+        void saveDraftToServer({ notes: payload.notes, tags: payload.tags, eventName: payload.eventName, savedAt: payload.savedAt });
+      }
+    } catch (e) {
+      console.warn('server draft save attempt failed', e);
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+function scheduleDraftSave(delay = 700) {
+  if (tagAutosaveTimer) clearTimeout(tagAutosaveTimer);
+  tagAutosaveTimer = setTimeout(() => {
+    saveDraftNow();
+    tagAutosaveTimer = null;
+    showToast("Draft saved locally.", "info");
+  }, delay);
+}
+
+function clearDraft() {
+  try { localStorage.removeItem("ala_event_draft_v1"); } catch (e) {}
+}
+
+function normalizeTagKey(tag) {
+  return normalizeEventLabelKey(tag || "");
+}
+
+function addTag(raw) {
+  const key = normalizeTagKey(raw);
+  if (!key) return;
+  if (selectedTags.some(t => normalizeTagKey(t) === key)) return;
+  selectedTags.push(titleCaseLabel(key));
+  renderSelectedTags();
+  scheduleDraftSave();
+}
+
+function removeTagByKey(key) {
+  const norm = String(key || "").trim();
+  selectedTags = selectedTags.filter(t => normalizeTagKey(t) !== norm);
+  renderSelectedTags();
+  scheduleDraftSave();
+}
+
+function renderSelectedTags() {
+  const container = document.getElementById("selectedTags");
+  if (!container) return;
+  const html = selectedTags.map(tag => `
+    <span class="tag-chip" data-tag="${normalizeTagKey(tag)}">${tag}<button class="tag-chip-remove" type="button" data-remove-tag="${normalizeTagKey(tag)}">×</button></span>
+  `).join("");
+  container.innerHTML = html;
+  const mirror = document.getElementById("selectedTagsChips");
+  if (mirror) mirror.innerHTML = html;
+}
+
+function buildTagCandidates() {
+  const set = new Map();
+  // Extract labels from action commits
+  (currentHistory.commits || []).forEach(commit => {
+    if (!commit) return;
+    const label = extractEventItemLabel(commit.summary) || commit.eventName || "";
+    const key = normalizeTagKey(label);
+    if (key) set.set(key, titleCaseLabel(key));
+  });
+  // Also include open event name
+  if (currentHistory.openEventWindow?.eventName) {
+    const key = normalizeTagKey(currentHistory.openEventWindow.eventName);
+    if (key) set.set(key, titleCaseLabel(key));
+  }
+
+  return [...set.entries()].map(([k, v]) => ({ key: k, label: v }));
+}
+
+function updateTagSuggestions(needle = "") {
+  const container = document.getElementById("tagSuggestions");
+  const input = String(needle || "").trim().toLowerCase();
+  if (!container) return;
+  const candidates = buildTagCandidates();
+  const filtered = candidates
+    .filter(c => {
+      if (!input) return true;
+      return c.key.includes(input) || c.label.toLowerCase().includes(input);
+    })
+    .slice(0, 30);
+
+  const html = filtered.map(c => `
+    <button class="tag-suggestion-item" type="button" data-tag-suggestion="${c.key}">${c.label}</button>
+  `).join("");
+  container.innerHTML = html;
+}
+
+function restoreDraftIfAny() {
+  const draft = getStoredDraft();
+  if (!draft) return;
+  try {
+    const notesEl = document.getElementById("notesInput");
+    if (notesEl && draft.notes) notesEl.value = draft.notes;
+    if (Array.isArray(draft.tags) && draft.tags.length) {
+      selectedTags = draft.tags.map(t => titleCaseLabel(normalizeTagKey(t))).filter(Boolean);
+      renderSelectedTags();
+    }
+  } catch (e) {}
+}
+
+function wireTagUI() {
+  const input = document.getElementById("tagSearchInput");
+  const suggestions = document.getElementById("tagSuggestions");
+  const selected = document.getElementById("selectedTags");
+  const notes = document.getElementById("notesInput");
+
+  if (input) {
+    input.addEventListener("input", () => updateTagSuggestions(input.value));
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const val = input.value.trim();
+        if (val) {
+          addTag(val);
+          input.value = "";
+          updateTagSuggestions("");
+        }
+      }
+    });
+  }
+
+  if (suggestions) {
+    suggestions.addEventListener("click", event => {
+      const btn = event.target.closest("button[data-tag-suggestion]");
+      if (!btn) return;
+      const key = String(btn.dataset.tagSuggestion || "");
+      if (!key) return;
+      addTag(key);
+      if (input) input.value = "";
+      updateTagSuggestions("");
+    });
+  }
+
+  if (selected) {
+    selected.addEventListener("click", event => {
+      const rem = event.target.closest("button[data-remove-tag]");
+      if (!rem) return;
+      const key = String(rem.dataset.removeTag || "");
+      if (!key) return;
+      removeTagByKey(key);
+    });
+  }
+
+  if (notes) {
+    notes.addEventListener("input", () => scheduleDraftSave());
+  }
+
+  // initial suggestions and draft restore
+  updateTagSuggestions("");
+  restoreDraftIfAny();
+}
+
+// Patch pre/post checkpoint flows to include tags/notes and clear draft on close
+async function _patchedCreatePreEventCheckpoint() {
+  const raw = dom.checkpointName.value.trim();
+  if (!raw) {
+    showToast("Enter an event name first.", "warn");
+    return;
+  }
+
+  const eventName = raw.slice(0, 60);
+  const write = await withWrite(async () => commitScoreMutation(data => {
+    const scores = scoresFromDoc(data);
+    const history = readHistoryState(data);
+
+    if (history.openEventWindow?.id) {
+      return { response: { applied: false, reason: "already_open", eventName: history.openEventWindow.eventName } };
+    }
+
+    const eventWindowId = `event-${history.nextEventWindowId || 1}`;
+    const commitExtras = {
+      commitKind: "checkpoint",
+      checkpointRole: "pre",
+      eventWindowId,
+      eventName,
+      checkpointDelta: getDeltaSinceLastCheckpoint(history, scores),
+      tags: selectedTags.slice(),
+      notes: (document.getElementById("notesInput")?.value || "").trim()
+    };
+
+    const nextHistory = appendHistoryCommit(
+      {
+        ...history,
+        nextEventWindowId: (history.nextEventWindowId || 1) + 1
+      },
+      scores,
+      `Checkpoint (Pre): ${eventName}`,
+      currentUserEmail,
+      commitExtras
+    );
+
+    nextHistory.openEventWindow = {
+      id: eventWindowId,
+      eventName,
+      openedAtMs: Date.now(),
+      preCommitId: nextHistory.commit.id,
+      openedByEmail: currentUserEmail
+    };
+
+    const updates = {
+      lastAction: {
+        type: "checkpoint_pre",
+        summary: `Checkpoint (Pre): ${eventName}`,
+        eventWindowId,
+        eventName,
+        authorEmail: currentUserEmail,
+        timestamp: serverTimestamp()
+      }
+    };
+
+    applySnapshotToUpdates(updates, scores);
+    writeHistoryState(updates, nextHistory);
+
+    return { updates, response: { applied: true, eventName } };
+  }));
+
+  if (!write.ok) return;
+  if (!write.value?.applied) {
+    if (write.value?.reason === "already_open") {
+      showToast(`Close the open event first: ${write.value.eventName}`, "warn");
+      return;
+    }
+    showToast("Unable to start event window.", "warn");
+    return;
+  }
+
+  dom.checkpointName.value = "";
+  updateLeaveWarningState();
+  showToast(`Pre checkpoint started for ${write.value.eventName}.`, "success");
+  scheduleDraftSave(300);
+}
+
+async function _patchedCreatePostEventCheckpoint() {
+  if (currentHistory.openEventWindow?.id && currentScores) {
+    const preview = buildOpenEventPreview(currentHistory, currentScores);
+    if (preview) {
+      const message = buildCloseConfirmMessage(preview);
+      if (!window.confirm(message)) return;
+    }
+  }
+
+  const write = await withWrite(async () => commitScoreMutation(data => {
+    const scores = scoresFromDoc(data);
+    const history = readHistoryState(data);
+    const preferredName = dom.checkpointName.value.trim();
+
+    let workingHistory = history;
+    let usedLegacyPre = false;
+
+    if (!workingHistory.openEventWindow?.id) {
+      const rescue = resolveLegacyOpenEvent(workingHistory, preferredName);
+      if (!rescue) {
+        return { response: { applied: false, reason: "no_open_event" } };
+      }
+      workingHistory = rescue.history;
+      usedLegacyPre = rescue.usedLegacyPre;
+    }
+
+    const openEvent = workingHistory.openEventWindow;
+    const preIndex = workingHistory.commits.findIndex(commit => commit.id === openEvent.preCommitId);
+    const preScores = preIndex >= 0 ? workingHistory.commits[preIndex].scores : emptyDelta();
+    const netDelta = diffScores(scores, preScores);
+    const actionCount = workingHistory.commits.filter(commit => commit.eventWindowId === openEvent.id && commit.commitKind === "action").length;
+    const durationMs = Date.now() - (Number(openEvent.openedAtMs) || Date.now());
+
+    const commitExtras = {
+      commitKind: "checkpoint",
+      checkpointRole: "post",
+      eventWindowId: openEvent.id,
+      eventName: openEvent.eventName,
+      checkpointDelta: getDeltaSinceLastCheckpoint(history, scores),
+      windowSummary: {
+        actionCount,
+        netDelta,
+        durationMs
+      },
+      tags: selectedTags.slice(),
+      notes: (document.getElementById("notesInput")?.value || "").trim()
+    };
+
+    const nextHistory = appendHistoryCommit(
+      workingHistory,
+      scores,
+      `Checkpoint (Post): ${openEvent.eventName}`,
+      currentUserEmail,
+      commitExtras
+    );
+
+    nextHistory.openEventWindow = null;
+    const updates = {
+      lastAction: {
+        type: "checkpoint_post",
+        summary: `Checkpoint (Post): ${openEvent.eventName}`,
+        eventWindowId: openEvent.id,
+        eventName: openEvent.eventName,
+        authorEmail: currentUserEmail,
+        timestamp: serverTimestamp()
+      },
+      latestEventSummary: {
+        label: openEvent.eventName,
+        closedAtMs: Date.now(),
+        actionCount,
+        netDelta
+      }
+    };
+
+    applySnapshotToUpdates(updates, scores);
+    writeHistoryState(updates, nextHistory);
+
+    return { updates, response: { applied: true, eventName: openEvent.eventName, usedLegacyPre } };
+  }));
+
+  if (!write.ok) return;
+  if (!write.value?.applied) {
+    if (write.value?.reason === "no_open_event") {
+      showToast("No open event window to close.", "warn");
+      return;
+    }
+    showToast("Unable to close event window.", "warn");
+    return;
+  }
+
+  dom.checkpointName.value = "";
+  updateLeaveWarningState();
+  clearDraft();
+  selectedTags = [];
+  renderSelectedTags();
+  showToast(
+    write.value.usedLegacyPre
+      ? `Post checkpoint created for ${write.value.eventName} (legacy pre linked).`
+      : `Post checkpoint created for ${write.value.eventName}.`,
+    "success"
+  );
+}
+
+// Replace original functions with patched versions so existing listeners use updated behavior
+try { createPreEventCheckpoint = _patchedCreatePreEventCheckpoint; } catch (e) {}
+try { createPostEventCheckpoint = _patchedCreatePostEventCheckpoint; } catch (e) {}
+
+// Wire tag UI after auth initialization
+try {
+  wireTagUI();
+} catch (e) {
+  console.error("Tag UI init failed", e);
+}
 
 window.addEventListener("beforeunload", event => {
   if (!shouldWarnBeforeLeave || dom.mainPanel.style.display !== "block") return;
