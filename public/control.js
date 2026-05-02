@@ -1575,15 +1575,30 @@ function renderNotifications(items) {
   const container = dom.notificationsList;
   if (!container) return;
   if (!items || items.length === 0) {
-    container.innerHTML = '<li class="log-empty">No notifications.</li>';
+    const empty = document.createElement('li');
+    empty.className = 'log-empty';
+    empty.textContent = 'No notifications.';
+    container.replaceChildren(empty);
     return;
   }
-  container.innerHTML = items.map(n => {
+  const fragment = document.createDocumentFragment();
+  for (const n of items) {
     const time = new Date(Number(n.createdAtMs || Date.now())).toLocaleString();
-    const summary = String(n.summary || n.message || '').replace(/</g, '&lt;');
+    const summary = String(n.summary || n.message || '');
     const by = String(n.createdByEmail || '');
-    return `<li class="notification-item"><div><strong>${summary}</strong> <span class="muted">${time}${by ? ' · by ' + by : ''}</span></div></li>`;
-  }).join('');
+    const item = document.createElement('li');
+    item.className = 'notification-item';
+    const line = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = summary;
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = `${time}${by ? ` · by ${by}` : ''}`;
+    line.append(strong, ' ', meta);
+    item.append(line);
+    fragment.append(item);
+  }
+  container.replaceChildren(fragment);
 }
 
 // --- Notifications config ---
@@ -1831,13 +1846,41 @@ function renderTemplatesList() {
   if (!container) return;
   const items = _readTemplatesStorage();
   if (!items || !items.length) {
-    container.innerHTML = '<li class="log-empty">No templates saved.</li>';
+    const empty = document.createElement('li');
+    empty.className = 'log-empty';
+    empty.textContent = 'No templates saved.';
+    container.replaceChildren(empty);
     return;
   }
-  container.innerHTML = items.map(t => {
-    const short = String(t.name || '').replace(/</g, '&lt;');
-    return `<li class="template-item"><div><strong>${short}</strong> <span class="muted">${(t.actions && t.actions.length) || 0} action(s)</span></div><div style="margin-top:6px"><button data-template-id="${t.id}" data-template-action="apply" class="btn btn-primary btn-mini">Apply</button> <button data-template-id="${t.id}" data-template-action="delete" class="btn btn-ghost btn-mini">Delete</button></div></li>`;
-  }).join('');
+  const fragment = document.createDocumentFragment();
+  for (const t of items) {
+    const short = String(t.name || '');
+    const item = document.createElement('li');
+    item.className = 'template-item';
+    const info = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = short;
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = `${(t.actions && t.actions.length) || 0} action(s)`;
+    info.append(title, ' ', meta);
+    const actions = document.createElement('div');
+    actions.style.marginTop = '6px';
+    const applyBtn = document.createElement('button');
+    applyBtn.dataset.templateId = t.id;
+    applyBtn.dataset.templateAction = 'apply';
+    applyBtn.className = 'btn btn-primary btn-mini';
+    applyBtn.textContent = 'Apply';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.dataset.templateId = t.id;
+    deleteBtn.dataset.templateAction = 'delete';
+    deleteBtn.className = 'btn btn-ghost btn-mini';
+    deleteBtn.textContent = 'Delete';
+    actions.append(applyBtn, ' ', deleteBtn);
+    item.append(info, actions);
+    fragment.append(item);
+  }
+  container.replaceChildren(fragment);
 }
 
 function loadTemplates() {
