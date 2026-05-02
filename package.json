@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "check": "node --check control.js && node --check leaderboard.js",
+    "check": "node --check public/control.js && node --check public/leaderboard.js",
     "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes",
     "iphone:prepare": "npm --prefix \"iPhone Sideload App\" run prepare:web",
     "iphone:sync": "npm --prefix \"iPhone Sideload App\" run build:ios-ready"

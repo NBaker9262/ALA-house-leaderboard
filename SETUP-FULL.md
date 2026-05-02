@@ -3,7 +3,7 @@ Full Setup — Control Panel, Google Sheets sync, and Email Notifications
 This doc collects the end-to-end setup steps for the control panel, including Google Sheets sync and email notification options.
 
 1) Control panel basics
-- Project uses Firebase (Firestore + Auth). Ensure you have a Firebase project and the `firebaseConfig` in `control.js` matches your project.
+- Project uses Firebase (Firestore + Auth). Ensure you have a Firebase project and the `firebaseConfig` in `public/control.js` matches your project.
 - Scores are stored at `leaderboard/scores` and a small config doc is stored at `leaderboard/config` (used for the Sheets webhook URL).
 - Admin users must be created in Firebase Auth and optionally added to `userProfiles` with `role` set to `admin` or `superadmin`.
 

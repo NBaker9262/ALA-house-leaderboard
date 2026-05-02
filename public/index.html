@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ALA House Points</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-a: #f3f5fb;
+      --bg-b: #dfe6f3;
+      --card: #ffffff;
+      --text: #192235;
+      --muted: #5f6e88;
+      --accent: #345cb3;
+      --accent-strong: #294e9f;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.88), transparent 40%),
+        radial-gradient(circle at 85% 5%, rgba(255, 255, 255, 0.4), transparent 45%),
+        linear-gradient(160deg, var(--bg-a), var(--bg-b));
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .shell {
+      width: min(980px, 100%);
+      display: grid;
+      gap: 20px;
+    }
+
+    header {
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 44px);
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .cards {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(24, 32, 52, 0.1);
+      box-shadow: 0 18px 44px rgba(16, 26, 44, 0.12);
+      padding: 22px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(52, 92, 179, 0.1);
+      color: var(--accent);
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .card p {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      font-weight: 700;
+      text-decoration: none;
+      color: #fff;
+      background: var(--accent);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      box-shadow: 0 10px 20px rgba(41, 78, 159, 0.2);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      background: var(--accent-strong);
+    }
+
+    .btn.secondary {
+      background: #f1f4fb;
+      color: var(--text);
+      box-shadow: none;
+      border: 1px solid rgba(24, 32, 52, 0.12);
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <h1>ALA House Points</h1>
+      <p>Select the view you need for the house points system.</p>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <span class="tag">Public Display</span>
+        <h2>Leaderboard View</h2>
+        <p>Fullscreen display of house points with live updates for events and celebrations.</p>
+        <a class="btn" href="leaderboard.html">Open Leaderboard</a>
+      </article>
+
+      <article class="card">
+        <span class="tag">Staff Tools</span>
+        <h2>Control Panel</h2>
+        <p>Sign in to award points, manage events, and run house competitions.</p>
+        <a class="btn secondary" href="control.html">Open Control Panel</a>
+      </article>
+    </section>
+
+    <footer>
+      Need help? See the setup docs in the repository.
+    </footer>
+  </main>
+</body>
+</html>
