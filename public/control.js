@@ -1586,6 +1586,7 @@ function renderNotifications(items) {
     const time = new Date(Number(n.createdAtMs || Date.now())).toLocaleString();
     const summary = String(n.summary || n.message || '');
     const by = String(n.createdByEmail || '');
+    const byText = by ? ` · by ${by}` : '';
     const item = document.createElement('li');
     item.className = 'notification-item';
     const line = document.createElement('div');
@@ -1593,7 +1594,7 @@ function renderNotifications(items) {
     strong.textContent = summary;
     const meta = document.createElement('span');
     meta.className = 'muted';
-    meta.textContent = `${time}${by ? ` · by ${by}` : ''}`;
+    meta.textContent = `${time}${byText}`;
     line.append(strong, ' ', meta);
     item.append(line);
     fragment.append(item);
@@ -1757,15 +1758,46 @@ function renderPendingProposals(items) {
   const container = dom.pendingProposalsList;
   if (!container) return;
   if (!items || items.length === 0) {
-    container.innerHTML = '<li class="log-empty">No pending proposals.</li>';
+    const empty = document.createElement('li');
+    empty.className = 'log-empty';
+    empty.textContent = 'No pending proposals.';
+    container.replaceChildren(empty);
     return;
   }
-  container.innerHTML = items.map(p => {
-    const title = String(p.title || p.summary || '').replace(/</g, '&lt;');
+  const fragment = document.createDocumentFragment();
+  for (const p of items) {
+    const title = String(p.title || p.summary || '');
     const by = String(p.proposerEmail || p.author || '');
     const id = String(p.id || '');
-    return `<li class="proposal-item"><div><strong>${title}</strong> <span class="muted">by ${by}</span></div><div style="margin-top:6px"><button data-proposal-id="${id}" data-proposal-action="approve" class="btn btn-primary btn-mini">Approve</button> <button data-proposal-id="${id}" data-proposal-action="reject" class="btn btn-ghost btn-mini">Reject</button></div></li>`;
-  }).join('\n');
+    const item = document.createElement('li');
+    item.className = 'proposal-item';
+    const info = document.createElement('div');
+    const strong = document.createElement('strong');
+    strong.textContent = title;
+    info.append(strong);
+    if (by) {
+      const meta = document.createElement('span');
+      meta.className = 'muted';
+      meta.textContent = `by ${by}`;
+      info.append(' ', meta);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'list-actions';
+    const approveBtn = document.createElement('button');
+    approveBtn.dataset.proposalId = id;
+    approveBtn.dataset.proposalAction = 'approve';
+    approveBtn.className = 'btn btn-primary btn-mini';
+    approveBtn.textContent = 'Approve';
+    const rejectBtn = document.createElement('button');
+    rejectBtn.dataset.proposalId = id;
+    rejectBtn.dataset.proposalAction = 'reject';
+    rejectBtn.className = 'btn btn-ghost btn-mini';
+    rejectBtn.textContent = 'Reject';
+    actions.append(approveBtn, ' ', rejectBtn);
+    item.append(info, actions);
+    fragment.append(item);
+  }
+  container.replaceChildren(fragment);
 }
 
 dom.pendingProposalsList?.addEventListener('click', event => {
@@ -1865,7 +1897,7 @@ function renderTemplatesList() {
     meta.textContent = `${(t.actions && t.actions.length) || 0} action(s)`;
     info.append(title, ' ', meta);
     const actions = document.createElement('div');
-    actions.style.marginTop = '6px';
+    actions.className = 'list-actions';
     const applyBtn = document.createElement('button');
     applyBtn.dataset.templateId = t.id;
     applyBtn.dataset.templateAction = 'apply';
