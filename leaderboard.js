@@ -1,18 +1,25 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
-  authDomain: "ala-house-leaderboard.firebaseapp.com",
-  projectId: "ala-house-leaderboard",
-  storageBucket: "ala-house-leaderboard.firebasestorage.app",
-  messagingSenderId: "827317744881",
-  appId: "1:827317744881:web:c8518ba6523610ab006550"
+﻿// Maintenance switchboard: update these values at the top when rotating Sheets endpoints/tabs.
+const SHEETS_SYNC = {
+  endpointUrl: "https://script.google.com/macros/s/AKfycbwE2Eey0VCj_ariQGr2IMZAaoKusvmDj2OpzMexxJdCYMZIdE9NmNwMfkra4tpZRB9krw/exec", // Required: Google Apps Script web app URL
+  secureApiKey: "asdfgvhjtnrtbvwegrhtyjnhgbfvdswdefrghyjhtgrfgrthbgrhtjyntgbfvdgr", // Required: shared secret/API key validated by Apps Script
+  spreadsheetId: "1jsCXm5fHWCPkNejatduLjLb6XpvApBUVm6mLSs4ePcI",
+  pointsTab: "Points",
+  pollIntervalMs: 10000,
+  timeoutMs: 15000
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const scoresDoc = doc(db, "leaderboard", "scores");
+const SHEET_TO_HOUSE = {
+  red: "red",
+  white: "white",
+  blue: "blue",
+  silver: "silver",
+  gray: "silver",
+  panda: "red",
+  polar: "white",
+  grizzly: "blue",
+  kodiak: "silver"
+};
+
 const chartArea = document.querySelector(".chart-area");
 const grid = document.querySelector(".y-grid");
 
@@ -37,20 +44,14 @@ const icons = {
   silver: document.getElementById("icon-silver")
 };
 
-const columns = Object.fromEntries(
-  Object.keys(bars).map(key => [key, bars[key].closest(".bar")])
-);
-
-const tracks = Object.values(columns)
-  .map(column => column?.querySelector(".bar-track"))
-  .filter(Boolean);
+const columns = Object.fromEntries(Object.keys(bars).map(key => [key, bars[key].closest(".bar")]));
+const tracks = Object.values(columns).map(column => column?.querySelector(".bar-track")).filter(Boolean);
 
 let lastConfettiHouse = null;
 let lastValues = null;
+let pollHandle = null;
 
-const EFFECT_TIMING = {
-  confettiDelayMs: 0
-};
+const EFFECT_TIMING = { confettiDelayMs: 0 };
 const GRID_STEP_POINTS = 100;
 
 function getIconGapPx() {
@@ -60,13 +61,8 @@ function getIconGapPx() {
 }
 
 function measureHeights() {
-  const trackHeights = tracks
-    .map(track => track.clientHeight)
-    .filter(height => Number.isFinite(height) && height > 0);
-
-  if (trackHeights.length === 0) {
-    return { usableBarHeight: 0 };
-  }
+  const trackHeights = tracks.map(track => track.clientHeight).filter(height => Number.isFinite(height) && height > 0);
+  if (trackHeights.length === 0) return { usableBarHeight: 0 };
 
   const plotHeight = Math.min(...trackHeights);
   const iconHeights = Object.values(icons)
@@ -77,7 +73,6 @@ function measureHeights() {
   const iconGap = getIconGapPx();
   const topClearance = Math.max(6, Math.round(plotHeight * 0.015));
   const usableBarHeight = Math.max(0, plotHeight - maxIconHeight - iconGap - topClearance);
-
   return { usableBarHeight };
 }
 
@@ -129,10 +124,7 @@ function updateHeights(values) {
 const resizeObserver = new ResizeObserver(() => {
   if (lastValues) updateHeights(lastValues);
 });
-
-if (chartArea) {
-  resizeObserver.observe(chartArea);
-}
+if (chartArea) resizeObserver.observe(chartArea);
 
 for (const icon of Object.values(icons)) {
   if (!icon.complete) {
@@ -142,59 +134,97 @@ for (const icon of Object.values(icons)) {
   }
 }
 
-onSnapshot(scoresDoc, snap => {
-  if (!snap.exists()) return;
-  const data = snap.data();
+function normalizeHouseFromSheet(rawHouse) {
+  const cleaned = String(rawHouse || "").trim().toLowerCase();
+  return SHEET_TO_HOUSE[cleaned] || null;
+}
 
-  const values = {
-    red: Math.max(0, Number(data.red) || 0),
-    white: Math.max(0, Number(data.white) || 0),
-    blue: Math.max(0, Number(data.blue) || 0),
-    silver: Math.max(0, Number(data.silver) || 0)
-  };
+function parsePointAmount(raw) {
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? amount : 0;
+}
 
-  for (const key of Object.keys(values)) {
-    labels[key].textContent = values[key];
+function aggregateScoresFromRows(rows) {
+  const totals = { red: 0, white: 0, blue: 0, silver: 0 };
+  for (const row of rows) {
+    const house = normalizeHouseFromSheet(row.House ?? row.house ?? row[0]);
+    const amount = parsePointAmount(row["Point Amount"] ?? row.pointAmount ?? row[1]);
+    if (house && Number.isFinite(amount)) totals[house] += amount;
+  }
+  return totals;
+}
+
+async function callSheetApi(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
+  if (!SHEETS_SYNC.endpointUrl || !SHEETS_SYNC.secureApiKey) {
+    throw new Error("Google Sheets sync is not configured in leaderboard.js");
   }
 
-  updateHeights(values);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(SHEETS_SYNC.endpointUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ apiKey: SHEETS_SYNC.secureApiKey, ...payload }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Sheets API failed (${response.status})`);
+    const json = await response.json();
+    if (json?.ok === false) throw new Error(json?.error || "Sheets API returned an error");
+    return json;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
+async function fetchScoresFromSheets() {
+  const result = await callSheetApi({
+    action: "getPoints",
+    spreadsheetId: SHEETS_SYNC.spreadsheetId,
+    tab: SHEETS_SYNC.pointsTab
+  });
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  return aggregateScoresFromRows(rows);
+}
+
+function maybeConfetti(values) {
   if (!lastValues) {
     lastValues = { ...values };
     return;
   }
 
-  const deltas = Object.keys(values).map(house => ({
-    house,
-    delta: values[house] - (lastValues[house] ?? 0)
-  }));
-
-  const biggestGain = deltas.reduce((best, current) => {
-    if (!best || current.delta > best.delta) return current;
-    return best;
-  }, null);
-
+  const deltas = Object.keys(values).map(house => ({ house, delta: values[house] - (lastValues[house] ?? 0) }));
+  const biggestGain = deltas.reduce((best, current) => (!best || current.delta > best.delta ? current : best), null);
   lastValues = { ...values };
 
   if (!biggestGain || biggestGain.delta <= 0) return;
   if (biggestGain.house === lastConfettiHouse && biggestGain.delta < 1) return;
 
   lastConfettiHouse = biggestGain.house;
-
-  const colorMap = {
-    red: "#ea0125",
-    white: "#fffeff",
-    blue: "#005ab5",
-    silver: "#a7a7aa"
-  };
-
+  const colorMap = { red: "#ea0125", white: "#fffeff", blue: "#005ab5", silver: "#a7a7aa" };
   const confettiColor = colorMap[biggestGain.house];
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (prefersReducedMotion) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   setTimeout(() => {
     confetti({ particleCount: 100, spread: 60, origin: { y: 0.62 }, colors: [confettiColor] });
     confetti({ particleCount: 55, spread: 50, origin: { x: 0, y: 0.82 }, angle: 60, colors: [confettiColor] });
     confetti({ particleCount: 55, spread: 50, origin: { x: 1, y: 0.82 }, angle: 120, colors: [confettiColor] });
   }, EFFECT_TIMING.confettiDelayMs);
-});
+}
+
+async function refreshScores() {
+  const values = await fetchScoresFromSheets();
+  for (const key of Object.keys(values)) labels[key].textContent = values[key];
+  updateHeights(values);
+  maybeConfetti(values);
+}
+
+function startPolling() {
+  if (pollHandle) clearInterval(pollHandle);
+  pollHandle = setInterval(() => {
+    void refreshScores().catch(error => console.error("Leaderboard Sheets sync failed", error));
+  }, SHEETS_SYNC.pollIntervalMs);
+}
+
+void refreshScores().catch(error => console.error("Initial leaderboard sync failed", error));
+startPolling();

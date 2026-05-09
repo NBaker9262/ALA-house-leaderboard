@@ -1,0 +1,112 @@
+[
+  {
+    "uid": "seed_701bbeabc07e7ae3e949",
+    "email": "nb72258@stu.alaschools.org",
+    "displayName": "Nate Briggs",
+    "customClaims": {
+      "role": "superadmin"
+    },
+    "passwordHash": "SytDmgg+BvoX88kul1E2y/enZSMI0AjlMPzVSH3Um3g=",
+    "passwordSalt": "4eF8va3fRLtTlUr1jpXnLA=="
+  },
+  {
+    "uid": "seed_e2b525806e8bc99116bc",
+    "email": "ap70382@stu.alaschools.org",
+    "displayName": "Alexis Portillo",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "K0si4vX+iDqwA2OoZ+/6+dodcyGJZLJ5JEl7+Hjbbcc=",
+    "passwordSalt": "Wj7tMqF1E4JuF4Jo6WqPyg=="
+  },
+  {
+    "uid": "seed_e678b59fd7be1ec5a858",
+    "email": "ec59654@stu.alaschools.org",
+    "displayName": "Emily Cox",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "+o+6uVxRF4xOKS1AEP2EImvw0FjHrHVI3L8NlRSV3Eo=",
+    "passwordSalt": "H+8ZBq9FRLbKLoFqjSB2OA=="
+  },
+  {
+    "uid": "seed_1c8435378116dd9db983",
+    "email": "el71845@stu.alaschools.org",
+    "displayName": "Elise Londonson",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "zgAMvMI04wGDVAjKnbiW81rjqoYihZ8HvunESTG+RqY=",
+    "passwordSalt": "j5QorFvHwSKZJ/WWaJQ/Rw=="
+  },
+  {
+    "uid": "seed_27803c5bdc8a586048f1",
+    "email": "io74755@stu.alaschools.org",
+    "displayName": "Ikponmwosa Obahiagbon",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "jPFXW1GwLaoagGEjMumBVcNl5CWPZZNIYlSinRqPhAY=",
+    "passwordSalt": "KZYSGldSKFL3xZubikww9A=="
+  },
+  {
+    "uid": "seed_386a11c6733d9967145b",
+    "email": "jd71016@stu.alaschools.org",
+    "displayName": "Jibrilla Dartoe",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "HRSS9Wn/Y39dELU+Usedi4VGHlpvz9Wdue5y4Uf2Gr4=",
+    "passwordSalt": "L76dggRn81YO7HAJcDCOLg=="
+  },
+  {
+    "uid": "seed_d2eca3f15b94be17a44f",
+    "email": "kc73702@stu.alaschools.org",
+    "displayName": "Kash Cravy",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "tDrRZd+Dzj13iDXMEgWkd05M2uotckuIkykxjfm6Y+U=",
+    "passwordSalt": "ALGgKyrrxWtXWBz/rgkoNQ=="
+  },
+  {
+    "uid": "seed_e482a7274cc46432127e",
+    "email": "lisl.nixon@alaschools.org",
+    "displayName": "Lisl Nixon",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "E77P1qYB6a9BuXbrUxKuHvIFlZOgriZyVIVygBMvaLg=",
+    "passwordSalt": "euUCOW4olkUhKFLEupoGrQ=="
+  },
+  {
+    "uid": "seed_373ec631c7ee6f3cfbd4",
+    "email": "ls70990@stu.alaschools.org",
+    "displayName": "Leia Saielli",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "Bv0z3jJiJtyfSeU3IZal8rcjMqgDtFeAwpFCZY8nOV0=",
+    "passwordSalt": "4dZkXaS+cD9jIAB3WUn2PA=="
+  },
+  {
+    "uid": "seed_1261093f6ec13b963b61",
+    "email": "nw72197@stu.alaschools.org",
+    "displayName": "Nola Wilson",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "Q+i/noz2+RUbD9eLUmTC/iEPnUl/7b/jj6oZTAFYDOI=",
+    "passwordSalt": "1jaWw9+eldUCGlIPHGXASQ=="
+  },
+  {
+    "uid": "seed_31be49cf1d5c5e5c6d43",
+    "email": "wp76080@stu.alaschools.org",
+    "displayName": "Wyatt Pulaski",
+    "customClaims": {
+      "role": "member"
+    },
+    "passwordHash": "MnvDKWvg/xXTJKpijM7fN0yJLX04O+s2ERevflFyEKw=",
+    "passwordSalt": "gCSZMHu+R9wPUP7cpSNebw=="
+  }
+]

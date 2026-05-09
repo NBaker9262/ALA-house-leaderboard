@@ -1,0 +1,75 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function profileExists(uid) {
+      return signedIn() && exists(profilePath(uid));
+    }
+
+    function profileRole(uid) {
+      return profileExists(uid) ? get(profilePath(uid)).data.role : null;
+    }
+
+    function tokenRole() {
+      return signedIn() ? request.auth.token.role : null;
+    }
+
+    function effectiveRole() {
+      return profileRole(request.auth.uid) != null ? profileRole(request.auth.uid) : tokenRole();
+    }
+
+    function roleRank(role) {
+      return role == 'helper' ? 0
+        : role == 'member' ? 1
+        : role == 'admin' ? 2
+        : role == 'superadmin' ? 3
+        : -1;
+    }
+
+    function hasRole(minimumRole) {
+      return roleRank(effectiveRole()) >= roleRank(minimumRole);
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isSelfOrSuperadmin(uid) {
+      return isSelf(uid) || hasRole('superadmin');
+    }
+
+    match /leaderboard/{documentId} {
+      allow read: if true;
+      allow write: if hasRole('member');
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || hasRole('superadmin');
+      allow create, update, delete: if hasRole('superadmin');
+    }
+
+    match /suggestions/{suggestionId} {
+      allow create: if hasRole('helper');
+      allow read: if hasRole('admin') || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow update, delete: if hasRole('admin');
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn();
+      allow create: if hasRole('superadmin') || (hasRole('admin') && request.resource.data.targetRole != 'superadmin');
+      allow update, delete: if hasRole('superadmin') || (hasRole('admin') && resource.data.targetRole != 'superadmin');
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

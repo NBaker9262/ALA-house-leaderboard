@@ -11,8 +11,8 @@
 <body>
 <div class="login-shell" id="loginBox">
   <form class="login-card" id="loginForm" novalidate>
-    <h1>Admin Sign In</h1>
-    <p class="login-subtitle">House points management</p>
+    <h1>Role Sign In</h1>
+    <p class="login-subtitle">House points management by helper, member, admin, and superadmin</p>
 
     <label class="field" for="email">
       <span>Email</span>
@@ -38,12 +38,201 @@
     </div>
 
     <div class="topbar-actions">
+      <button id="menuBtn" class="btn btn-outline menu-btn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden>
+        <span class="menu-icon" aria-hidden="true">☰</span>
+        <span>Superadmin</span>
+        <span id="menuBadge" class="menu-badge" hidden>0</span>
+      </button>
       <span id="loggedInAs" class="muted"></span>
       <button id="signOutBtn" class="btn btn-outline" type="button">Sign Out</button>
     </div>
   </header>
 
+  <section class="notice-bar" id="noticeBar" hidden>
+    <div class="notice-copy">
+      <span class="notice-label">Latest notice</span>
+      <strong id="noticeTitle">No notifications yet</strong>
+      <p id="noticeBody">Superadmins can post role-aware notices from the hamburger menu.</p>
+    </div>
+    <span id="noticeMeta" class="notice-meta">All roles</span>
+  </section>
+
+  <div id="drawerOverlay" class="drawer-overlay" hidden></div>
+
+  <aside id="superadminDrawer" class="superadmin-drawer" aria-hidden="true" hidden>
+    <div class="drawer-shell">
+      <header class="drawer-header">
+        <div>
+          <p class="drawer-kicker">Superadmin Controls</p>
+          <h3>Management Menu</h3>
+        </div>
+        <button id="closeDrawerBtn" class="btn btn-outline btn-mini" type="button">Close</button>
+      </header>
+
+      <nav class="drawer-nav" aria-label="Superadmin quick links">
+        <button id="jumpNotificationsBtn" class="btn btn-muted btn-mini" type="button">Notifications</button>
+        <button id="jumpUsersBtn" class="btn btn-muted btn-mini" type="button">Users & Roles</button>
+        <button id="jumpHistoryBtn" class="btn btn-muted btn-mini" type="button">History</button>
+      </nav>
+
+      <section class="drawer-panel">
+        <div class="section-header">
+          <div>
+            <h4>Post Notification</h4>
+            <p class="section-note">Create a notice for all roles or target a specific role.</p>
+          </div>
+          <span id="notificationStatus" class="section-status">Ready</span>
+        </div>
+
+        <form id="notificationForm" class="notification-form">
+          <label class="field compact" for="notificationTitle">
+            <span>Title</span>
+            <input id="notificationTitle" type="text" maxlength="60" placeholder="Assembly update" data-action-control>
+          </label>
+
+          <label class="field compact" for="notificationTargetRole">
+            <span>Target</span>
+            <select id="notificationTargetRole" data-action-control>
+              <option value="all" selected>All roles</option>
+              <option value="helper">Helpers</option>
+              <option value="member">Members</option>
+              <option value="admin">Admins</option>
+              <option value="superadmin">Superadmins</option>
+            </select>
+          </label>
+
+          <label class="field notification-body" for="notificationBody">
+            <span>Message</span>
+            <textarea id="notificationBody" rows="4" maxlength="280" placeholder="What should everyone know?" data-action-control></textarea>
+          </label>
+
+          <button id="notificationBtn" class="btn btn-primary" type="submit" data-action-control>Post Notice</button>
+        </form>
+
+        <div class="notification-review-controls">
+          <label class="field compact" for="notificationReviewRole">
+            <span>Review as</span>
+            <select id="notificationReviewRole" data-action-control>
+              <option value="all" selected>All roles</option>
+              <option value="helper">Helpers</option>
+              <option value="member">Members</option>
+              <option value="admin">Admins</option>
+              <option value="superadmin">Superadmins</option>
+            </select>
+          </label>
+          <p class="section-note">Switch the preview role to see exactly who can read or manage each notice.</p>
+        </div>
+
+        <ul id="notificationList" class="notification-list"><li class="log-empty">No notifications yet</li></ul>
+      </section>
+
+      <section id="suggestionReviewPanel" class="drawer-panel suggestion-review-panel">
+        <div class="section-header">
+          <div>
+            <h4>Suggestion Review</h4>
+            <p class="section-note">Admins and superadmins can approve helper suggestions directly into the Points tab.</p>
+          </div>
+          <span id="suggestionQueueStatus" class="section-status">Ready</span>
+        </div>
+
+        <ul id="suggestionQueueList" class="suggestion-queue"><li class="log-empty">No suggestions yet</li></ul>
+      </section>
+
+      <section id="userAdminPanel" class="drawer-panel user-admin-panel" hidden>
+        <div class="section-header">
+          <div>
+            <h4 id="usersHeading">Users & Roles</h4>
+            <p class="section-note">Superadmins manage Firestore profiles here. Auth accounts were seeded through Firebase CLI import.</p>
+          </div>
+        </div>
+
+        <form class="user-create-form" id="userCreateForm">
+          <label class="field compact" for="newUserDisplayName">
+            <span>Display Name</span>
+            <input id="newUserDisplayName" type="text" maxlength="80" placeholder="Optional display name" data-action-control>
+          </label>
+
+          <label class="field compact" for="newUserEmail">
+            <span>Email</span>
+            <input id="newUserEmail" type="email" placeholder="user@school.org" required data-action-control>
+          </label>
+
+          <label class="field compact" for="newUserPassword">
+            <span>Starting Password</span>
+            <input id="newUserPassword" type="text" placeholder="StuG0!" value="StuG0!" data-action-control>
+          </label>
+
+          <label class="field compact" for="newUserRole">
+            <span>Role</span>
+            <select id="newUserRole" data-action-control>
+              <option value="member" selected>Member</option>
+              <option value="helper">Helper</option>
+              <option value="admin">Admin</option>
+              <option value="superadmin">Super Admin</option>
+            </select>
+          </label>
+
+          <button id="userCreateBtn" class="btn btn-primary user-create-btn" type="submit" data-action-control>Save Profile</button>
+        </form>
+
+        <p id="userManagementStatus" class="section-status">Ready to create or edit users</p>
+        <ul id="userList" class="user-list"><li class="log-empty">No user profiles loaded yet</li></ul>
+      </section>
+    </div>
+  </aside>
+
+  <section class="role-summary">
+    <div>
+      <h3>Current Access</h3>
+      <p id="roleDescription" class="role-description">Checking your account role...</p>
+    </div>
+    <span id="roleBadge" class="role-badge" data-role="member">Member</span>
+  </section>
+
+  <section class="suggestion-panel" id="suggestionPanel">
+    <div class="section-header">
+      <div>
+        <h3>Submit a Point Suggestion</h3>
+        <p class="section-note">Helpers use this area; higher roles can still submit suggestions when needed.</p>
+      </div>
+      <span id="suggestionStatus" class="section-status">Waiting for input</span>
+    </div>
+
+    <div class="suggestion-grid">
+      <label class="field compact" for="suggestionHouse">
+        <span>House</span>
+        <select id="suggestionHouse" data-action-control>
+          <option value="red">Red Panda House</option>
+          <option value="white">Polar House</option>
+          <option value="blue">Grizzly House</option>
+          <option value="silver">Kodiak House</option>
+        </select>
+      </label>
+
+      <label class="field compact" for="suggestionDelta">
+        <span>Points</span>
+        <input id="suggestionDelta" type="number" inputmode="numeric" placeholder="+10 or -10" data-action-control>
+      </label>
+
+      <label class="field suggestion-reason" for="suggestionReason">
+        <span>Reason</span>
+        <input id="suggestionReason" type="text" maxlength="120" placeholder="Why should this change be made?" data-action-control>
+      </label>
+    </div>
+
+    <div class="suggestion-actions">
+      <button id="suggestionBtn" class="btn btn-primary" type="button" data-action-control>Submit Suggestion</button>
+    </div>
+  </section>
+
   <section class="houses" id="housesContainer"></section>
+
+  <section class="activity-log">
+    <h4>Point Entry Details</h4>
+    <div class="checkpoint-row">
+      <input id="pointReason" type="text" maxlength="120" placeholder="Reason for points (required)" data-action-control>
+    </div>
+  </section>
 
   <section class="place-awards" id="placePanel">
     <div class="place-awards-header">
@@ -68,7 +257,7 @@
   </section>
 
   <section class="activity-log">
-    <h4>History Checkpoints</h4>
+    <h4>Point History</h4>
     <div class="checkpoint-row">
       <input id="checkpointName" type="text" maxlength="60" placeholder="Checkpoint name (example: Friday Assembly)" data-action-control>
       <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Checkpoint</button>
@@ -79,6 +268,12 @@
   <section class="activity-log">
     <h4>Recent Activity</h4>
     <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
+  </section>
+
+  <section class="activity-log sheet-log-panel">
+    <h4>Google Sheet Log</h4>
+    <p class="section-note">Everything important is appended to the Log tab and mirrored here for review.</p>
+    <ul id="sheetLogList"><li class="log-empty">No sheet log entries yet</li></ul>
   </section>
 </div>
 
