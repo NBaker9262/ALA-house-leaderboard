@@ -1,4 +1,11 @@
-﻿// Maintenance switchboard: update these values at the top when rotating Sheets endpoints/tabs.
+﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import {
+  getDatabase,
+  onValue,
+  ref
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+// Maintenance switchboard: update these values at the top when rotating Sheets endpoints/tabs.
 const SHEETS_SYNC = {
   endpointUrl: "https://script.google.com/macros/s/AKfycbwE2Eey0VCj_ariQGr2IMZAaoKusvmDj2OpzMexxJdCYMZIdE9NmNwMfkra4tpZRB9krw/exec", // Required: Google Apps Script web app URL
   secureApiKey: "asdfgvhjtnrtbvwegrhtyjnhgbfvdswdefrghyjhtgrfgrthbgrhtjyntgbfvdgr", // Required: shared secret/API key validated by Apps Script
@@ -6,6 +13,16 @@ const SHEETS_SYNC = {
   pointsTab: "Points",
   pollIntervalMs: 10000,
   timeoutMs: 15000
+};
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
+  authDomain: "ala-house-leaderboard.firebaseapp.com",
+  databaseURL: "https://ala-house-leaderboard-default-rtdb.firebaseio.com",
+  projectId: "ala-house-leaderboard",
+  storageBucket: "ala-house-leaderboard.firebasestorage.app",
+  messagingSenderId: "827317744881",
+  appId: "1:827317744881:web:c8518ba6523610ab006550"
 };
 
 const SHEET_TO_HOUSE = {
@@ -22,6 +39,9 @@ const SHEET_TO_HOUSE = {
 
 const chartArea = document.querySelector(".chart-area");
 const grid = document.querySelector(".y-grid");
+const app = initializeApp(firebaseConfig);
+const realtimeDb = getDatabase(app);
+const leaderboardScoresRef = ref(realtimeDb, "leaderboard/scores");
 
 const bars = {
   red: document.getElementById("bar-red"),
@@ -50,6 +70,7 @@ const tracks = Object.values(columns).map(column => column?.querySelector(".bar-
 let lastConfettiHouse = null;
 let lastValues = null;
 let pollHandle = null;
+let realtimeUnsubscribe = null;
 
 const EFFECT_TIMING = { confettiDelayMs: 0 };
 const GRID_STEP_POINTS = 100;
@@ -154,6 +175,21 @@ function aggregateScoresFromRows(rows) {
   return totals;
 }
 
+function aggregateScoresFromRealtime(value) {
+  const source = value && typeof value === "object" && value.scores && typeof value.scores === "object"
+    ? value.scores
+    : value;
+
+  if (!source || typeof source !== "object") return null;
+
+  return {
+    red: parsePointAmount(source.red),
+    white: parsePointAmount(source.white),
+    blue: parsePointAmount(source.blue),
+    silver: parsePointAmount(source.silver)
+  };
+}
+
 async function callSheetApi(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
   if (!SHEETS_SYNC.endpointUrl || !SHEETS_SYNC.secureApiKey) {
     throw new Error("Google Sheets sync is not configured in leaderboard.js");
@@ -214,9 +250,30 @@ function maybeConfetti(values) {
 
 async function refreshScores() {
   const values = await fetchScoresFromSheets();
+  renderScores(values);
+}
+
+function renderScores(values) {
   for (const key of Object.keys(values)) labels[key].textContent = values[key];
   updateHeights(values);
   maybeConfetti(values);
+}
+
+function startRealtimeSync() {
+  if (realtimeUnsubscribe) return;
+
+  realtimeUnsubscribe = onValue(leaderboardScoresRef, snapshot => {
+    if (!snapshot.exists()) return;
+    const values = aggregateScoresFromRealtime(snapshot.val());
+    if (!values) return;
+    renderScores(values);
+    if (pollHandle) {
+      clearInterval(pollHandle);
+      pollHandle = null;
+    }
+  }, error => {
+    console.error("Leaderboard realtime sync failed", error);
+  });
 }
 
 function startPolling() {
@@ -228,3 +285,4 @@ function startPolling() {
 
 void refreshScores().catch(error => console.error("Initial leaderboard sync failed", error));
 startPolling();
+startRealtimeSync();

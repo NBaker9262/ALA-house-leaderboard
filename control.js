@@ -15,6 +15,11 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
+  getDatabase,
+  ref,
+  set
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+import {
   getAuth,
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -130,6 +135,7 @@ const ROLE_CONFIG = {
 const firebaseConfig = {
   apiKey: "AIzaSyAAAz2beBA1QnvLPTbaq5LmEnR6m-VvK0s",
   authDomain: "ala-house-leaderboard.firebaseapp.com",
+  databaseURL: "https://ala-house-leaderboard-default-rtdb.firebaseio.com",
   projectId: "ala-house-leaderboard",
   storageBucket: "ala-house-leaderboard.firebasestorage.app",
   messagingSenderId: "827317744881",
@@ -138,6 +144,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const realtimeDb = getDatabase(app);
+const leaderboardScoresRef = ref(realtimeDb, "leaderboard/scores");
 const auth = getAuth(app);
 const scoresDoc = doc(db, "leaderboard", "scores");
 const eventDoc = doc(db, "settings", "event");
@@ -2211,6 +2219,23 @@ async function backupToFirebase({ scores, summary, actionMeta }) {
   });
 }
 
+async function syncLeaderboardScores(scores) {
+  if (!scores) return;
+
+  try {
+    await set(leaderboardScoresRef, {
+      red: scoreNumber(scores, "red"),
+      white: scoreNumber(scores, "white"),
+      blue: scoreNumber(scores, "blue"),
+      silver: scoreNumber(scores, "silver"),
+      updatedAt: Date.now(),
+      updatedBy: currentUserEmail || "system"
+    });
+  } catch (error) {
+    console.warn("Realtime leaderboard sync failed", error);
+  }
+}
+
 function updateLeaveWarningState() {
   const checkpointDraft = dom.checkpointName?.value.trim() || "";
   if (checkpointDraft) {
@@ -2274,6 +2299,8 @@ async function refreshFromSheets() {
   } else {
     setSyncStatus(`Live - Updated ${formatClock()}`, "live");
   }
+
+  return fromCache;
 }
 
 function requireRole(minimumRole, message) {
@@ -2290,10 +2317,9 @@ async function applyDelta(house, delta) {
 
   const write = await withWrite(async () => {
     const result = await appendPointRow({ houseId: house, delta, reason, source: "delta" });
-    if (result.queued) {
-      applyOptimisticPointRow(result.row);
-      return { queued: true };
-    }
+    applyOptimisticPointRow(result.row);
+    if (result.queued) return { queued: true };
+    await syncLeaderboardScores(currentScores);
     await refreshFromSheets();
     await backupToFirebase({
       scores: currentScores,
@@ -2353,12 +2379,11 @@ async function applyPlaceAwards() {
         reason: `${reason} (${entry.badge})`,
         source: "place_award"
       });
-      if (result.queued) {
-        queued = true;
-        applyOptimisticPointRow(result.row);
-      }
+      if (result.queued) queued = true;
+      applyOptimisticPointRow(result.row);
     }
     if (!queued) {
+      await syncLeaderboardScores(currentScores);
       await refreshFromSheets();
       await backupToFirebase({
         scores: currentScores,
@@ -2421,13 +2446,12 @@ async function restoreHistoryIndex(index, reasonOverride = "", minimumRole = "ad
         reason: `${reason} (restore #${target.id})`,
         source: "restore"
       });
-      if (result.queued) {
-        queued = true;
-        applyOptimisticPointRow(result.row);
-      }
+      if (result.queued) queued = true;
+      applyOptimisticPointRow(result.row);
     }
 
     if (!queued) {
+      await syncLeaderboardScores(currentScores);
       await refreshFromSheets();
       await backupToFirebase({
         scores: currentScores,
@@ -2464,13 +2488,12 @@ async function resetScores() {
           reason: `${reason} (reset)`,
           source: "reset"
         });
-        if (result.queued) {
-          queued = true;
-          applyOptimisticPointRow(result.row);
-        }
+        if (result.queued) queued = true;
+        applyOptimisticPointRow(result.row);
       }
     }
     if (!queued) {
+      await syncLeaderboardScores(currentScores);
       await refreshFromSheets();
       await backupToFirebase({
         scores: currentScores,
@@ -2556,9 +2579,7 @@ async function approveSuggestion(suggestion) {
 
   const write = await withWrite(async () => {
     const result = await appendPointRow({ houseId: house, delta, reason, source: "suggestion_approval" });
-    if (result.queued) {
-      applyOptimisticPointRow(result.row);
-    }
+    applyOptimisticPointRow(result.row);
     await setDoc(doc(db, "suggestions", suggestion.id), {
       status: "approved",
       reviewedBy: currentUserEmail,
@@ -2566,6 +2587,7 @@ async function approveSuggestion(suggestion) {
       reviewedAt: serverTimestamp()
     }, { merge: true });
     if (!result.queued) {
+      await syncLeaderboardScores(currentScores);
       await refreshFromSheets();
       await backupToFirebase({
         scores: currentScores,
@@ -2956,7 +2978,10 @@ onAuthStateChanged(auth, async user => {
   void flushQueuedWrites();
 
   try {
-    await refreshFromSheets();
+    const fromCache = await refreshFromSheets();
+    if (!fromCache) {
+      await syncLeaderboardScores(currentScores);
+    }
     startSheetPolling();
     await appendSyncLog({ level: "INFO", eventType: "SESSION_START", details: "Control panel signed in" });
     await loadStudents();

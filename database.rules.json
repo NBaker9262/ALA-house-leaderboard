@@ -1,0 +1,37 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "leaderboard": {
+      "scores": {
+        ".read": true,
+        ".write": "auth != null",
+        "red": {
+          ".validate": "newData.isNumber()"
+        },
+        "white": {
+          ".validate": "newData.isNumber()"
+        },
+        "blue": {
+          ".validate": "newData.isNumber()"
+        },
+        "silver": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedBy": {
+          ".validate": "newData.isString()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
