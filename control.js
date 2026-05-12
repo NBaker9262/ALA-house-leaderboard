@@ -790,6 +790,18 @@ function normalizeStudentRow(row) {
   return { name, houseId, houseRaw, grade };
 }
 
+function normalizeStudentRowsPayload(rows) {
+  if (Array.isArray(rows)) return rows;
+  if (typeof rows === "string") {
+    return rows
+      .split(/\r?\n/)
+      .map(line => line.trimEnd())
+      .filter(line => line.trim().length > 0);
+  }
+  if (rows && typeof rows === "object") return [rows];
+  return [];
+}
+
 function isLikelyGradeValue(raw) {
   const value = String(raw || "").trim().toLowerCase();
   if (!value) return false;
@@ -823,6 +835,11 @@ function extractHouseStudentFromObjectRow(row) {
 
 function normalizeRowToCells(row) {
   if (Array.isArray(row)) return row;
+  if (typeof row === "string") {
+    if (row.includes("\t")) return row.split("\t");
+    if (row.includes("  ")) return row.trim().split(/\s{2,}/);
+    return [row];
+  }
   if (row && typeof row === "object") return Object.values(row);
   return [];
 }
@@ -911,9 +928,11 @@ function parseWideHouseRosterRows(rows) {
 }
 
 function parseStudentRows(rows) {
-  const wideRosterParsed = parseWideHouseRosterRows(rows);
+  const normalizedRows = normalizeStudentRowsPayload(rows);
+  if (!normalizedRows.length) return [];
+  const wideRosterParsed = parseWideHouseRosterRows(normalizedRows);
   if (wideRosterParsed.length) return wideRosterParsed;
-  return rows.map(normalizeStudentRow).filter(Boolean);
+  return normalizedRows.map(normalizeStudentRow).filter(Boolean);
 }
 
 function renderStudentSearch(list) {
@@ -952,7 +971,7 @@ async function loadStudents() {
       spreadsheetId: SHEETS_SYNC.spreadsheetId,
       tab: SHEETS_SYNC.studentsTab
     });
-    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    const rows = normalizeStudentRowsPayload(result?.rows);
     const parsed = parseStudentRows(rows);
     const missingHouse = parsed.filter(item => !item.houseId).length;
     const missingGrade = parsed.filter(item => !item.grade).length;
