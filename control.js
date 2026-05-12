@@ -819,6 +819,29 @@ function normalizeRowToCells(row) {
   return [];
 }
 
+function findNextNonEmptyCellIndex(cells, startIndex) {
+  for (let index = startIndex; index < cells.length; index += 1) {
+    if (String(cells[index] || "").trim()) return index;
+  }
+  return -1;
+}
+
+function assignHouseAcrossSpan(houseByColumn, cells, startIndex, houseId) {
+  let nextHeaderIndex = cells.length;
+  for (let index = startIndex + 1; index < cells.length; index += 1) {
+    if (normalizeHouseFromSheet(cells[index])) {
+      nextHeaderIndex = index;
+      break;
+    }
+  }
+
+  for (let index = startIndex; index < nextHeaderIndex; index += 1) {
+    if (!String(cells[index] || "").trim() || index === startIndex) {
+      houseByColumn[index] = houseId;
+    }
+  }
+}
+
 function parseWideHouseRosterRows(rows) {
   if (!Array.isArray(rows) || !rows.length) return [];
   const houseByColumn = {};
@@ -841,9 +864,7 @@ function parseWideHouseRosterRows(rows) {
     for (let index = 0; index < cells.length; index += 1) {
       const houseId = normalizeHouseFromSheet(cells[index]);
       if (houseId) {
-        houseByColumn[index] = houseId;
-        const next = String(cells[index + 1] || "").trim();
-        if (!next) houseByColumn[index + 1] = houseId;
+        assignHouseAcrossSpan(houseByColumn, cells, index, houseId);
         if (!headerColumns.includes(index)) headerColumns.push(index);
         rowIntroducedHeaders = true;
         sawHouseHeaders = true;
@@ -851,11 +872,16 @@ function parseWideHouseRosterRows(rows) {
     }
     if (rowIntroducedHeaders) continue;
 
-    for (let index = 0; index < cells.length - 1; index += 1) {
+    for (let index = 0; index < cells.length; index += 1) {
       const grade = String(cells[index] || "").trim();
-      const name = String(cells[index + 1] || "").trim();
-      if (!name || !isLikelyGradeValue(grade)) continue;
-      let houseId = houseByColumn[index] || houseByColumn[index + 1] || "";
+      if (!isLikelyGradeValue(grade)) continue;
+
+      const nameIndex = findNextNonEmptyCellIndex(cells, index + 1);
+      if (nameIndex < 0) continue;
+      const name = String(cells[nameIndex] || "").trim();
+      if (!name) continue;
+
+      let houseId = houseByColumn[index] || houseByColumn[nameIndex] || "";
       if (!houseId && headerColumns.length) {
         let nearest = -1;
         for (const column of headerColumns) {
@@ -869,7 +895,7 @@ function parseWideHouseRosterRows(rows) {
         houseId,
         houseRaw: houseId ? (HOUSE_TO_SHEET[houseId] || houseId) : ""
       });
-      index += 1;
+      index = nameIndex;
     }
   }
 
