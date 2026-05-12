@@ -56,6 +56,17 @@ service cloud.firestore {
       allow create, update, delete: if hasRole('superadmin');
     }
 
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+    }
+
+    match /event_logs/{logId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
     match /suggestions/{suggestionId} {
       allow create: if hasRole('helper');
       allow read: if hasRole('admin') || (signedIn() && resource.data.authorUid == request.auth.uid);
@@ -64,7 +75,9 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if signedIn();
-      allow create: if hasRole('superadmin') || (hasRole('admin') && request.resource.data.targetRole != 'superadmin');
+      allow create: if hasRole('superadmin')
+        || (hasRole('admin') && request.resource.data.targetRole != 'superadmin')
+        || (signedIn() && request.resource.data.type == 'system' && request.resource.data.targetRole == 'all');
       allow update, delete: if hasRole('superadmin') || (hasRole('admin') && resource.data.targetRole != 'superadmin');
     }
 

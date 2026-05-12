@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>House Points Control</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="control.css" />
 </head>
 
@@ -38,8 +38,12 @@
     </div>
 
     <div class="topbar-actions">
+      <button id="toolsMenuBtn" class="btn btn-outline menu-btn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden>
+        <span class="menu-icon" aria-hidden="true">Tools</span>
+        <span>Tools</span>
+      </button>
       <button id="menuBtn" class="btn btn-outline menu-btn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden>
-        <span class="menu-icon" aria-hidden="true">☰</span>
+        <span class="menu-icon" aria-hidden="true">Menu</span>
         <span>Superadmin</span>
         <span id="menuBadge" class="menu-badge" hidden>0</span>
       </button>
@@ -52,10 +56,96 @@
     <div class="notice-copy">
       <span class="notice-label">Latest notice</span>
       <strong id="noticeTitle">No notifications yet</strong>
-      <p id="noticeBody">Superadmins can post role-aware notices from the hamburger menu.</p>
+      <p id="noticeBody">Notices are posted from the menu.</p>
     </div>
     <span id="noticeMeta" class="notice-meta">All roles</span>
   </section>
+
+  <section class="event-banner" id="eventBanner" hidden>
+    <div>
+      <p class="event-banner-kicker">Event in progress</p>
+      <strong id="eventBannerTitle">Event name</strong>
+      <p id="eventBannerMeta" class="event-banner-meta">Started just now</p>
+    </div>
+    <button id="eventBannerStop" class="btn btn-outline btn-mini" type="button">Stop event</button>
+  </section>
+
+  <div id="toolsDrawerOverlay" class="drawer-overlay" hidden></div>
+
+  <aside id="toolsDrawer" class="superadmin-drawer tools-drawer" aria-hidden="true" hidden>
+    <div class="drawer-shell">
+      <header class="drawer-header">
+        <div>
+          <p class="drawer-kicker">Scoring Tools</p>
+          <h3>Tools Menu</h3>
+        </div>
+        <button id="closeToolsDrawerBtn" class="btn btn-outline btn-mini" type="button">Close</button>
+      </header>
+
+      <nav class="drawer-nav" aria-label="Tools quick links">
+        <button id="jumpStudentsBtn" class="btn btn-muted btn-mini" type="button">Students</button>
+        <button id="jumpEventLogBtn" class="btn btn-muted btn-mini" type="button">Event Timeline</button>
+        <button id="jumpHistoryLogBtn" class="btn btn-muted btn-mini" type="button">History</button>
+        <button id="jumpSheetLogBtn" class="btn btn-muted btn-mini" type="button">Sheet Log</button>
+      </nav>
+
+      <section class="drawer-panel" id="studentsPanel">
+        <div class="section-header">
+          <div>
+            <h4>Students</h4>
+          </div>
+          <span id="studentSearchStatus" class="section-status">Loading</span>
+        </div>
+
+        <div class="student-search">
+          <input id="studentSearchInput" type="text" placeholder="Search student" />
+          <button id="studentRefreshBtn" class="btn btn-outline btn-mini" type="button">Refresh</button>
+        </div>
+        <ul id="studentSearchList" class="student-search-list"><li class="log-empty">No results yet</li></ul>
+      </section>
+
+      <section class="drawer-panel event-log-panel">
+        <div class="section-header">
+          <div>
+            <h4>Event Timeline</h4>
+          </div>
+          <span id="eventLogStatus" class="section-status">Waiting for event</span>
+        </div>
+        <ul id="eventLogList" class="event-log-list"><li class="log-empty">No event activity yet</li></ul>
+      </section>
+
+      <section class="drawer-panel">
+        <div class="section-header">
+          <div>
+            <h4>Point History</h4>
+          </div>
+        </div>
+        <div class="checkpoint-row">
+          <input id="checkpointName" type="text" maxlength="60" placeholder="Checkpoint name" data-action-control>
+          <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Checkpoint</button>
+        </div>
+        <ul id="historyList"><li class="log-empty">No history yet</li></ul>
+      </section>
+
+      <section class="drawer-panel">
+        <div class="section-header">
+          <div>
+            <h4>Recent Activity</h4>
+          </div>
+        </div>
+        <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
+      </section>
+
+      <section class="drawer-panel sheet-log-panel">
+        <div class="section-header">
+          <div>
+            <h4>Google Sheet Log</h4>
+          </div>
+        </div>
+        <ul id="sheetLogList"><li class="log-empty">No sheet log entries yet</li></ul>
+      </section>
+    </div>
+  </aside>
 
   <div id="drawerOverlay" class="drawer-overlay" hidden></div>
 
@@ -79,8 +169,8 @@
         <div class="section-header">
           <div>
             <h4>Post Notification</h4>
-            <p class="section-note">Create a notice for all roles or target a specific role.</p>
           </div>
+          <button class="info-icon" type="button" title="Create a notice for all roles or target a specific role.">i</button>
           <span id="notificationStatus" class="section-status">Ready</span>
         </div>
 
@@ -120,7 +210,7 @@
               <option value="superadmin">Superadmins</option>
             </select>
           </label>
-          <p class="section-note">Switch the preview role to see exactly who can read or manage each notice.</p>
+          <button class="info-icon" type="button" title="Switch the preview role to see exactly who can read or manage each notice.">i</button>
         </div>
 
         <ul id="notificationList" class="notification-list"><li class="log-empty">No notifications yet</li></ul>
@@ -130,20 +220,46 @@
         <div class="section-header">
           <div>
             <h4>Suggestion Review</h4>
-            <p class="section-note">Admins and superadmins can approve helper suggestions directly into the Points tab.</p>
           </div>
+          <button class="info-icon" type="button" title="Admins and superadmins can approve helper suggestions directly into the Points tab.">i</button>
           <span id="suggestionQueueStatus" class="section-status">Ready</span>
         </div>
 
         <ul id="suggestionQueueList" class="suggestion-queue"><li class="log-empty">No suggestions yet</li></ul>
       </section>
 
+      <section class="drawer-panel session-settings-panel">
+        <div class="section-header">
+          <div>
+            <h4>Session Settings</h4>
+          </div>
+          <button class="info-icon" type="button" title="Control the event mode and system alert visibility.">i</button>
+        </div>
+
+        <div class="settings-grid">
+          <div>
+            <p class="settings-label">Current mode</p>
+            <p id="sessionModeLabel" class="settings-value">Not set</p>
+            <p id="sessionEventLabel" class="settings-muted"></p>
+          </div>
+          <div class="settings-actions">
+            <button id="changeModeBtn" class="btn btn-outline btn-mini" type="button">Change mode</button>
+            <button id="retryQueueBtn" class="btn btn-muted btn-mini" type="button">Retry queued writes</button>
+          </div>
+        </div>
+
+        <label class="toggle-row" for="systemAlertsToggle">
+          <input id="systemAlertsToggle" type="checkbox" />
+          <span>Show system alerts in notifications</span>
+        </label>
+      </section>
+
       <section id="userAdminPanel" class="drawer-panel user-admin-panel" hidden>
         <div class="section-header">
           <div>
             <h4 id="usersHeading">Users & Roles</h4>
-            <p class="section-note">Superadmins manage Firestore profiles here. Auth accounts were seeded through Firebase CLI import.</p>
           </div>
+          <button class="info-icon" type="button" title="Superadmins manage Firestore profiles here. Auth accounts were seeded through Firebase CLI import.">i</button>
         </div>
 
         <form class="user-create-form" id="userCreateForm">
@@ -189,12 +305,57 @@
     <span id="roleBadge" class="role-badge" data-role="member">Member</span>
   </section>
 
+  <section class="mode-switch-panel" id="modeSwitchPanel">
+    <div class="mode-switch-header">
+      <div>
+        <h3>Scoring Mode</h3>
+      </div>
+      <button class="info-icon" type="button" title="Switch between long-term events and one-off point additions.">i</button>
+      <div class="mode-switch" role="tablist" aria-label="Scoring mode">
+        <button class="mode-pill" type="button" data-mode="longTerm">Long-term event</button>
+        <button class="mode-pill" type="button" data-mode="oneOff">One-off addition</button>
+      </div>
+    </div>
+
+    <div class="mode-panels">
+      <div class="mode-panel" data-mode-panel="longTerm">
+        <label class="field compact" for="longTermEventName">
+          <span>Event name</span>
+          <input id="longTermEventName" type="text" maxlength="80" placeholder="Back to school assembly" data-action-control>
+        </label>
+        <label class="field compact" for="longTermDetail">
+          <span>Detail for this change (optional)</span>
+          <input id="longTermDetail" type="text" maxlength="120" placeholder="Add a detail if needed" data-action-control>
+        </label>
+        <div class="event-controls">
+          <div>
+            <p class="event-status" id="eventStatus">No active event</p>
+            <p class="event-hint">Members and above can start or stop events.</p>
+          </div>
+          <div class="event-actions">
+            <button id="startEventBtn" class="btn btn-primary btn-mini" type="button">Start event</button>
+            <button id="stopEventBtn" class="btn btn-outline btn-mini" type="button">Stop event</button>
+          </div>
+        </div>
+        <p class="mode-hint">Point changes use the event name. The detail is appended only if provided.</p>
+      </div>
+
+      <div class="mode-panel" data-mode-panel="oneOff">
+        <label class="field compact" for="pointReason">
+          <span>Reason for points</span>
+          <input id="pointReason" type="text" maxlength="120" placeholder="Reason for points (required)" data-action-control>
+        </label>
+        <p class="mode-hint">Required for all one-off point changes.</p>
+      </div>
+    </div>
+  </section>
+
   <section class="suggestion-panel" id="suggestionPanel">
     <div class="section-header">
       <div>
         <h3>Submit a Point Suggestion</h3>
-        <p class="section-note">Helpers use this area; higher roles can still submit suggestions when needed.</p>
       </div>
+      <button class="info-icon" type="button" title="Helpers use this area; higher roles can still submit suggestions when needed.">i</button>
       <span id="suggestionStatus" class="section-status">Waiting for input</span>
     </div>
 
@@ -227,13 +388,6 @@
 
   <section class="houses" id="housesContainer"></section>
 
-  <section class="activity-log">
-    <h4>Point Entry Details</h4>
-    <div class="checkpoint-row">
-      <input id="pointReason" type="text" maxlength="120" placeholder="Reason for points (required)" data-action-control>
-    </div>
-  </section>
-
   <section class="place-awards" id="placePanel">
     <div class="place-awards-header">
       <h3>Award Place Points</h3>
@@ -256,25 +410,7 @@
     <button id="resetBtn" class="btn btn-danger" type="button" data-action-control>Reset All Scores</button>
   </section>
 
-  <section class="activity-log">
-    <h4>Point History</h4>
-    <div class="checkpoint-row">
-      <input id="checkpointName" type="text" maxlength="60" placeholder="Checkpoint name (example: Friday Assembly)" data-action-control>
-      <button id="checkpointBtn" class="btn btn-primary" type="button" data-action-control>Create Checkpoint</button>
-    </div>
-    <ul id="historyList"><li class="log-empty">No history yet</li></ul>
-  </section>
-
-  <section class="activity-log">
-    <h4>Recent Activity</h4>
-    <ul id="activityList"><li class="log-empty">No activity yet this session</li></ul>
-  </section>
-
-  <section class="activity-log sheet-log-panel">
-    <h4>Google Sheet Log</h4>
-    <p class="section-note">Everything important is appended to the Log tab and mirrored here for review.</p>
-    <ul id="sheetLogList"><li class="log-empty">No sheet log entries yet</li></ul>
-  </section>
+  <div></div>
 </div>
 
 <div id="toastContainer"></div>

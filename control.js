@@ -23,14 +23,40 @@ import {
 
 // Maintenance switchboard: update these values at the top when rotating Sheets endpoints/tabs.
 const SHEETS_SYNC = {
-  endpointUrl: "https://script.google.com/macros/s/AKfycbwE2Eey0VCj_ariQGr2IMZAaoKusvmDj2OpzMexxJdCYMZIdE9NmNwMfkra4tpZRB9krw/exec", // Required: Google Apps Script web app URL
+  endpointUrl: "https://script.google.com/macros/s/AKfycbxCeiau0aJRde_zFEQao4KNS9Z6qvVu7XwDrkQ2KR-gVQjJQm_Xqu33DrGh7QuoRD_J7g/exec", // Required: Google Apps Script web app URL
   secureApiKey: "asdfgvhjtnrtbvwegrhtyjnhgbfvdswdefrghyjhtgrfgrthbgrhtjyntgbfvdgr", // Required: shared secret/API key validated by Apps Script
   spreadsheetId: "1jsCXm5fHWCPkNejatduLjLb6XpvApBUVm6mLSs4ePcI",
   pointsTab: "Points",
   logTab: "Log",
+  studentsTab: "Students",
   pollIntervalMs: 10000,
   timeoutMs: 20000
 };
+
+const STORAGE_KEYS = {
+  pointsCache: "ala.sheet.points.cache",
+  logCache: "ala.sheet.log.cache",
+  pendingWrites: "ala.sheet.pending.writes",
+  systemAlertThrottle: "ala.system.alert.throttle",
+  showSystemAlerts: "ala.show.system.alerts",
+  sessionMode: "ala.session.mode",
+  sessionEventName: "ala.session.event.name"
+};
+
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 4000,
+  jitterMs: 120
+};
+
+const QUEUE_CONFIG = {
+  maxItems: 120,
+  maxAttempts: 6,
+  maxAgeMs: 1000 * 60 * 60 * 72
+};
+
+const ALERT_THROTTLE_MS = 1000 * 60 * 10;
 
 const HOUSE_TO_SHEET = {
   red: "Panda",
@@ -114,9 +140,11 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const scoresDoc = doc(db, "leaderboard", "scores");
+const eventDoc = doc(db, "settings", "event");
 const usersCollection = collection(db, "users");
 const notificationsCollection = collection(db, "notifications");
 const suggestionsCollection = collection(db, "suggestions");
+const eventLogsCollection = collection(db, "event_logs");
 
 const houses = [
   { id: "red", name: "Red Panda House", bg: "#ea0125", text: "#ffffff" },
@@ -125,12 +153,12 @@ const houses = [
   { id: "silver", name: "Kodiak House", bg: "#a7a7aa", text: "#111111" }
 ];
 
-const QUICK_DELTAS = [10, 20, 50];
+const QUICK_DELTAS = [10, 15, 30, 50];
 const PLACE_POINTS = [50, 30, 15, 10];
 const PLACE_BADGES = ["1st", "2nd", "3rd", "4th"];
-const MAX_LOG_ENTRIES = 14;
-const MAX_HISTORY_COMMITS = 1000;
-const HISTORY_LIST_LIMIT = 500;
+const MAX_LOG_ENTRIES = 50;
+const MAX_HISTORY_COMMITS = 10000;
+const HISTORY_LIST_LIMIT = 5000;
 
 const dom = {
   loginBox: document.getElementById("loginBox"),
@@ -142,6 +170,19 @@ const dom = {
   mainPanel: document.getElementById("mainPanel"),
   housesContainer: document.getElementById("housesContainer"),
   pointReason: document.getElementById("pointReason"),
+  longTermEventName: document.getElementById("longTermEventName"),
+  longTermDetail: document.getElementById("longTermDetail"),
+  modeSwitchPanel: document.getElementById("modeSwitchPanel"),
+  modeSwitch: document.querySelector(".mode-switch"),
+  eventBanner: document.getElementById("eventBanner"),
+  eventBannerTitle: document.getElementById("eventBannerTitle"),
+  eventBannerMeta: document.getElementById("eventBannerMeta"),
+  eventBannerStop: document.getElementById("eventBannerStop"),
+  startEventBtn: document.getElementById("startEventBtn"),
+  stopEventBtn: document.getElementById("stopEventBtn"),
+  eventStatus: document.getElementById("eventStatus"),
+  eventLogStatus: document.getElementById("eventLogStatus"),
+  eventLogList: document.getElementById("eventLogList"),
   placeRows: document.getElementById("placeRows"),
   placeHint: document.getElementById("placeHint"),
   placePreview: document.getElementById("placePreview"),
@@ -167,6 +208,18 @@ const dom = {
   jumpNotificationsBtn: document.getElementById("jumpNotificationsBtn"),
   jumpUsersBtn: document.getElementById("jumpUsersBtn"),
   jumpHistoryBtn: document.getElementById("jumpHistoryBtn"),
+  toolsMenuBtn: document.getElementById("toolsMenuBtn"),
+  toolsDrawer: document.getElementById("toolsDrawer"),
+  toolsDrawerOverlay: document.getElementById("toolsDrawerOverlay"),
+  closeToolsDrawerBtn: document.getElementById("closeToolsDrawerBtn"),
+  jumpStudentsBtn: document.getElementById("jumpStudentsBtn"),
+  jumpEventLogBtn: document.getElementById("jumpEventLogBtn"),
+  jumpHistoryLogBtn: document.getElementById("jumpHistoryLogBtn"),
+  jumpSheetLogBtn: document.getElementById("jumpSheetLogBtn"),
+  studentSearchInput: document.getElementById("studentSearchInput"),
+  studentSearchStatus: document.getElementById("studentSearchStatus"),
+  studentSearchList: document.getElementById("studentSearchList"),
+  studentRefreshBtn: document.getElementById("studentRefreshBtn"),
   roleBadge: document.getElementById("roleBadge"),
   roleDescription: document.getElementById("roleDescription"),
   suggestionPanel: document.getElementById("suggestionPanel"),
@@ -186,6 +239,11 @@ const dom = {
   suggestionReviewPanel: document.getElementById("suggestionReviewPanel"),
   suggestionQueueStatus: document.getElementById("suggestionQueueStatus"),
   suggestionQueueList: document.getElementById("suggestionQueueList"),
+  sessionModeLabel: document.getElementById("sessionModeLabel"),
+  sessionEventLabel: document.getElementById("sessionEventLabel"),
+  changeModeBtn: document.getElementById("changeModeBtn"),
+  retryQueueBtn: document.getElementById("retryQueueBtn"),
+  systemAlertsToggle: document.getElementById("systemAlertsToggle"),
   userAdminPanel: document.getElementById("userAdminPanel"),
   userCreateForm: document.getElementById("userCreateForm"),
   newUserDisplayName: document.getElementById("newUserDisplayName"),
@@ -214,6 +272,7 @@ let currentUserRole = "member";
 let currentUserProfile = null;
 let currentUsers = [];
 let currentNotifications = [];
+let currentStudents = [];
 let notificationsUnsubscribe = null;
 let notificationsBootstrapped = false;
 let suggestionsUnsubscribe = null;
@@ -223,6 +282,14 @@ let shouldWarnBeforeLeave = false;
 let sheetPollHandle = null;
 let firebaseReady = false;
 let usersUnsubscribe = null;
+let currentMode = "";
+let currentEventName = "";
+let currentEventState = { active: false, name: "" };
+let eventLogsUnsubscribe = null;
+let showSystemAlerts = true;
+let lastSyncStatus = { message: "", tone: "neutral" };
+let pollFailureCount = 0;
+let queueFlushHandle = null;
 
 renderHouseCards();
 buildPlaceRows();
@@ -247,6 +314,370 @@ function getRoleConfig(role) {
   return ROLE_CONFIG[normalizeRole(role) || "member"] || ROLE_CONFIG.member;
 }
 
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn("Storage read failed", error);
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn("Storage write failed", error);
+  }
+}
+
+function readStoredBoolean(key, fallback = true) {
+  const value = readJsonStorage(key, null);
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
+function writeStoredBoolean(key, value) {
+  writeJsonStorage(key, Boolean(value));
+}
+
+function normalizeMode(mode) {
+  const cleaned = String(mode || "").trim().toLowerCase();
+  if (cleaned === "longterm" || cleaned === "long-term" || cleaned === "long_term") return "longTerm";
+  if (cleaned === "oneoff" || cleaned === "one-off" || cleaned === "one_off") return "oneOff";
+  return "";
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function backoffDelay(attempt) {
+  const base = RETRY_CONFIG.baseDelayMs * Math.pow(2, Math.max(0, attempt - 1));
+  const jitter = Math.floor(Math.random() * RETRY_CONFIG.jitterMs);
+  return Math.min(RETRY_CONFIG.maxDelayMs, base + jitter);
+}
+
+function isOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+function isRetryableError(error) {
+  if (isOffline()) return true;
+  const message = String(error?.message || "").toLowerCase();
+  if (error?.name === "AbortError") return true;
+  return message.includes("network")
+    || message.includes("failed to fetch")
+    || message.includes("timeout")
+    || message.includes("temporarily")
+    || message.includes("service unavailable");
+}
+
+async function retryWithBackoff(task, maxAttempts = RETRY_CONFIG.maxAttempts) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableError(error) || attempt === maxAttempts) break;
+      await delay(backoffDelay(attempt));
+    }
+  }
+  throw lastError;
+}
+
+function loadModeFromSession() {
+  const storedMode = normalizeMode(sessionStorage.getItem(STORAGE_KEYS.sessionMode));
+  const storedEventName = String(sessionStorage.getItem(STORAGE_KEYS.sessionEventName) || "").trim();
+  currentMode = storedMode;
+  currentEventName = storedEventName;
+}
+
+function storeModeInSession(mode, eventName) {
+  sessionStorage.setItem(STORAGE_KEYS.sessionMode, mode);
+  sessionStorage.setItem(STORAGE_KEYS.sessionEventName, eventName);
+}
+
+function updateModeLabels() {
+  if (dom.sessionModeLabel) {
+    if (!currentMode) dom.sessionModeLabel.textContent = "Not set";
+    else dom.sessionModeLabel.textContent = currentMode === "longTerm" ? "Long-term event" : "One-off point addition";
+  }
+  if (dom.sessionEventLabel) {
+    dom.sessionEventLabel.textContent = currentMode === "longTerm" && currentEventName
+      ? `Event: ${currentEventName}`
+      : "";
+  }
+}
+
+function setModeSwitchActive(mode) {
+  const normalized = normalizeMode(mode) || "oneOff";
+  currentMode = normalized;
+  if (dom.modeSwitch) {
+    dom.modeSwitch.querySelectorAll(".mode-pill").forEach(button => {
+      const isActive = button.getAttribute("data-mode") === normalized;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    });
+  }
+  document.querySelectorAll("[data-mode-panel]").forEach(panel => {
+    const isActive = panel.getAttribute("data-mode-panel") === normalized;
+    panel.classList.toggle("is-active", isActive);
+  });
+  updateModeLabels();
+}
+
+function setModeSwitchLocked(isLocked) {
+  if (!dom.modeSwitch) return;
+  dom.modeSwitch.classList.toggle("is-locked", isLocked);
+  dom.modeSwitch.querySelectorAll(".mode-pill").forEach(button => {
+    const mode = button.getAttribute("data-mode") || "oneOff";
+    button.disabled = isLocked && mode !== "longTerm";
+  });
+}
+
+function renderEventBanner(state) {
+  if (!dom.eventBanner) return;
+  if (!state?.active) {
+    dom.eventBanner.hidden = true;
+    return;
+  }
+  dom.eventBanner.hidden = false;
+  if (dom.eventBannerTitle) dom.eventBannerTitle.textContent = state.name || "Active event";
+  if (dom.eventBannerMeta) {
+    const startedBy = state.startedBy ? `Started by ${state.startedBy}` : "Event in progress";
+    dom.eventBannerMeta.textContent = startedBy;
+  }
+}
+
+function applyEventState(state) {
+  currentEventState = state || { active: false, name: "" };
+  const active = Boolean(currentEventState.active);
+  if (active) {
+    currentMode = "longTerm";
+    currentEventName = String(currentEventState.name || "").trim();
+    if (dom.longTermEventName) {
+      dom.longTermEventName.value = currentEventName;
+      dom.longTermEventName.disabled = true;
+    }
+    setModeSwitchActive("longTerm");
+    setModeSwitchLocked(true);
+    const oneOffPanel = document.querySelector('[data-mode-panel="oneOff"]');
+    if (oneOffPanel) oneOffPanel.classList.add("is-locked");
+    void loadEventLogs();
+  } else {
+    if (dom.longTermEventName) dom.longTermEventName.disabled = false;
+    setModeSwitchLocked(false);
+    const oneOffPanel = document.querySelector('[data-mode-panel="oneOff"]');
+    if (oneOffPanel) oneOffPanel.classList.remove("is-locked");
+    clearEventLogs();
+  }
+  if (dom.eventStatus) {
+    dom.eventStatus.textContent = active ? `Event active: ${currentEventName || "Current event"}` : "No active event";
+  }
+  if (dom.stopEventBtn) dom.stopEventBtn.disabled = !active;
+  renderEventBanner(currentEventState);
+}
+
+function renderEventLogs(rows = []) {
+  if (!dom.eventLogList) return;
+  const activeName = String(currentEventState?.name || "").trim();
+  const filtered = activeName
+    ? rows.filter(row => String(row.eventName || "").trim() === activeName)
+    : rows;
+
+  if (!filtered.length) {
+    dom.eventLogList.innerHTML = '<li class="log-empty">No event activity yet</li>';
+    return;
+  }
+
+  dom.eventLogList.innerHTML = filtered.map(row => {
+    const timestamp = row.createdAt?.toDate ? row.createdAt.toDate().toLocaleString() : "Just now";
+    const actor = escapeHtml(row.user || "system");
+    const houseId = String(row.house || "").trim();
+    const house = escapeHtml(findHouseName(houseId));
+    const houseMeta = houses.find(item => item.id === houseId);
+    const delta = Number(row.delta || 0);
+    const reason = escapeHtml(row.reason || "");
+    const sign = delta > 0 ? "+" : "";
+    const queued = row.queued ? "<span class=\"event-chip event-chip-warn\">Queued</span>" : "";
+
+    return `
+      <li class="event-log-item">
+        <div class="event-log-meta">${timestamp} - ${actor}</div>
+        <div class="event-log-detail">
+          <span class="event-chip" style="background:${houseMeta?.bg || "#111827"};color:${houseMeta?.text || "#ffffff"}">${house}</span>
+          <span class="event-chip event-chip-score">${sign}${delta}</span>
+          <span>${reason}</span>
+          ${queued}
+        </div>
+      </li>
+    `;
+  }).join("");
+}
+
+function clearEventLogs() {
+  if (eventLogsUnsubscribe) {
+    eventLogsUnsubscribe();
+    eventLogsUnsubscribe = null;
+  }
+  if (dom.eventLogStatus) dom.eventLogStatus.textContent = "Waiting for event";
+  renderEventLogs([]);
+}
+
+function loadEventLogs() {
+  if (!currentEventState?.active) return;
+  if (eventLogsUnsubscribe) {
+    eventLogsUnsubscribe();
+    eventLogsUnsubscribe = null;
+  }
+  if (dom.eventLogStatus) dom.eventLogStatus.textContent = "Live";
+  const eventQuery = query(eventLogsCollection, orderBy("createdAt", "desc"), limit(30));
+  eventLogsUnsubscribe = onSnapshot(eventQuery, snapshot => {
+    const rows = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    renderEventLogs(rows);
+  }, error => {
+    console.error(error);
+    if (dom.eventLogStatus) dom.eventLogStatus.textContent = "Unavailable";
+  });
+}
+
+async function appendEventLog(entry) {
+  if (!currentEventState?.active) return;
+  try {
+    await addDoc(eventLogsCollection, {
+      eventName: currentEventState.name || "",
+      house: entry.house,
+      delta: entry.delta,
+      reason: entry.reason || "",
+      user: currentUserEmail || "",
+      role: currentUserRole || "",
+      source: entry.source || "",
+      queued: Boolean(entry.queued),
+      createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn("Event log write failed", error);
+  }
+}
+
+function applyModeSelection(mode) {
+  const normalized = normalizeMode(mode) || "oneOff";
+  if (currentEventState?.active && normalized !== "longTerm") {
+    showToast("An event is active. Mode is locked to long-term.", "warn");
+    setModeSwitchActive("longTerm");
+    return;
+  }
+  currentMode = normalized;
+  currentEventName = String(dom.longTermEventName?.value || "").trim();
+  try {
+    storeModeInSession(currentMode, currentEventName);
+  } catch (error) {
+    console.warn("Mode storage failed", error);
+  }
+  setModeSwitchActive(currentMode);
+}
+
+async function startEvent() {
+  if (!requireRole("member", "Members and above can start events.")) return;
+  const name = String(dom.longTermEventName?.value || "").trim();
+  if (!name) {
+    showToast("Enter an event name before starting.", "warn");
+    dom.longTermEventName?.focus();
+    return;
+  }
+  const confirmed = window.confirm(`Start the event "${name}"? This will lock scoring to long-term mode.`);
+  if (!confirmed) return;
+
+  await setDoc(eventDoc, {
+    active: true,
+    name,
+    startedBy: currentUserEmail || "",
+    startedByRole: currentUserRole || "",
+    startedAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+async function stopEvent() {
+  if (!requireRole("member", "Members and above can stop events.")) return;
+  const confirmed = window.confirm("Stop the current event? Scoring will return to one-off mode.");
+  if (!confirmed) return;
+
+  await setDoc(eventDoc, {
+    active: false,
+    name: "",
+    endedBy: currentUserEmail || "",
+    endedByRole: currentUserRole || "",
+    endedAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+function ensureModeSwitch() {
+  loadModeFromSession();
+  if (!currentMode) currentMode = "oneOff";
+  if (dom.longTermEventName) dom.longTermEventName.value = currentEventName || "";
+  setModeSwitchActive(currentMode);
+}
+
+function getPendingWrites() {
+  const list = readJsonStorage(STORAGE_KEYS.pendingWrites, []);
+  return Array.isArray(list) ? list : [];
+}
+
+function savePendingWrites(list) {
+  writeJsonStorage(STORAGE_KEYS.pendingWrites, list);
+}
+
+function prunePendingWrites(list) {
+  const cutoff = Date.now() - QUEUE_CONFIG.maxAgeMs;
+  return list.filter(item => Number(item?.createdAt || 0) >= cutoff);
+}
+
+function pendingWriteCount() {
+  return getPendingWrites().length;
+}
+
+function updateSystemAlertsToggle() {
+  showSystemAlerts = readStoredBoolean(STORAGE_KEYS.showSystemAlerts, true);
+  if (dom.systemAlertsToggle) dom.systemAlertsToggle.checked = showSystemAlerts;
+}
+
+function shouldEmitSystemAlert(key) {
+  const throttle = readJsonStorage(STORAGE_KEYS.systemAlertThrottle, {});
+  const last = Number(throttle[key] || 0);
+  if (Date.now() - last < ALERT_THROTTLE_MS) return false;
+  throttle[key] = Date.now();
+  writeJsonStorage(STORAGE_KEYS.systemAlertThrottle, throttle);
+  return true;
+}
+
+async function emitSystemAlert({ title, body, severity = "warn", source = "sheets", dedupeKey }) {
+  if (dedupeKey && !shouldEmitSystemAlert(dedupeKey)) return;
+
+  try {
+    await addDoc(notificationsCollection, {
+      title: title || "System alert",
+      body: body || "",
+      targetRole: "all",
+      status: "active",
+      type: "system",
+      severity,
+      source,
+      createdBy: currentUserEmail || "system",
+      createdByRole: currentUserRole || "member",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn("System alert could not be posted", error);
+  }
+}
+
 function setSuggestionStatus(message, tone = "neutral") {
   if (!dom.suggestionStatus) return;
   dom.suggestionStatus.textContent = message;
@@ -268,6 +699,244 @@ function setNotificationStatus(message, tone = "neutral") {
   if (!dom.notificationStatus) return;
   dom.notificationStatus.textContent = message;
   dom.notificationStatus.dataset.tone = tone;
+}
+
+function setStudentStatus(message, tone = "neutral") {
+  if (!dom.studentSearchStatus) return;
+  dom.studentSearchStatus.textContent = message;
+  dom.studentSearchStatus.dataset.tone = tone;
+}
+
+function closeToolsDrawer() {
+  if (dom.toolsDrawer) {
+    dom.toolsDrawer.hidden = true;
+    dom.toolsDrawer.setAttribute("aria-hidden", "true");
+  }
+  if (dom.toolsDrawerOverlay) dom.toolsDrawerOverlay.hidden = true;
+  if (dom.toolsMenuBtn) dom.toolsMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+function openToolsDrawer() {
+  if (!hasRoleAtLeast(currentUserRole, "member")) return;
+  if (dom.toolsDrawer) {
+    dom.toolsDrawer.hidden = false;
+    dom.toolsDrawer.setAttribute("aria-hidden", "false");
+  }
+  if (dom.toolsDrawerOverlay) dom.toolsDrawerOverlay.hidden = false;
+  if (dom.toolsMenuBtn) dom.toolsMenuBtn.setAttribute("aria-expanded", "true");
+  closeDrawer();
+}
+
+function toggleToolsDrawer() {
+  if (dom.toolsDrawer?.hidden) openToolsDrawer();
+  else closeToolsDrawer();
+}
+
+function normalizeStudentRow(row) {
+  if (!row) return null;
+  if (Array.isArray(row)) {
+    const grade = String(row[0] || "").trim();
+    const name = String(row[1] || "").trim();
+    const houseRaw = String(row[2] || "").trim();
+    if (!name) return null;
+    const houseId = normalizeHouseFromSheet(houseRaw) || "";
+    return { name, houseId, houseRaw, grade };
+  }
+
+  if (row.Student && row.House) {
+    const name = String(row.Student || "").trim();
+    if (!name) return null;
+    const houseRaw = String(row.House || "").trim();
+    const grade = String(row.Grade || "").trim();
+    const houseId = normalizeHouseFromSheet(houseRaw) || "";
+    return { name, houseId, houseRaw, grade };
+  }
+
+  const nameKeys = ["Student", "Name", "Student Name", "StudentName", "Full Name", "FullName"];
+  const houseKeys = ["Panda", "Polar", "Grizzly", "Kodiak", "Color", "House Color", "HouseColor"];
+  let name = "";
+  let houseRaw = "";
+  let grade = "";
+  const gradeKeys = ["Grade", "Grade Level", "GradeLevel", "Class", "Level"];
+
+  for (const key of nameKeys) {
+    if (row[key]) {
+      name = String(row[key]).trim();
+      break;
+    }
+  }
+  for (const key of houseKeys) {
+    if (row[key]) {
+      houseRaw = String(row[key]).trim();
+      break;
+    }
+  }
+  for (const key of gradeKeys) {
+    if (row[key]) {
+      grade = String(row[key]).trim();
+      break;
+    }
+  }
+  if (!name) return null;
+  const houseId = normalizeHouseFromSheet(houseRaw) || "";
+  return { name, houseId, houseRaw, grade };
+}
+
+function isLikelyGradeValue(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  if (!value) return false;
+  if (value === "k" || value === "kg" || value === "kindergarten") return true;
+  return /^\d{1,2}$/.test(value);
+}
+
+function extractHouseStudentFromObjectRow(row) {
+  if (!row || Array.isArray(row) || typeof row !== "object") return [];
+  const parsed = [];
+  const entries = Object.entries(row);
+  for (const [key, value] of entries) {
+    const houseId = normalizeHouseFromSheet(key);
+    if (!houseId) continue;
+    const rawCell = String(value || "").trim();
+    if (!rawCell) continue;
+    const match = rawCell.match(/^(k|kg|kindergarten|\d{1,2})\s+(.+)$/i);
+    if (!match) continue;
+    const grade = String(match[1] || "").trim();
+    const name = String(match[2] || "").trim();
+    if (!name) continue;
+    parsed.push({
+      name,
+      grade,
+      houseId,
+      houseRaw: HOUSE_TO_SHEET[houseId] || houseId
+    });
+  }
+  return parsed;
+}
+
+function normalizeRowToCells(row) {
+  if (Array.isArray(row)) return row;
+  if (row && typeof row === "object") return Object.values(row);
+  return [];
+}
+
+function parseWideHouseRosterRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  const houseByColumn = {};
+  const headerColumns = [];
+  let sawHouseHeaders = false;
+  const parsed = [];
+
+  for (const row of rows) {
+    const objectParsed = extractHouseStudentFromObjectRow(row);
+    if (objectParsed.length) {
+      parsed.push(...objectParsed);
+      sawHouseHeaders = true;
+      continue;
+    }
+
+    const cells = normalizeRowToCells(row);
+    if (!cells.length) continue;
+
+    let rowIntroducedHeaders = false;
+    for (let index = 0; index < cells.length; index += 1) {
+      const houseId = normalizeHouseFromSheet(cells[index]);
+      if (houseId) {
+        houseByColumn[index] = houseId;
+        const next = String(cells[index + 1] || "").trim();
+        if (!next) houseByColumn[index + 1] = houseId;
+        if (!headerColumns.includes(index)) headerColumns.push(index);
+        rowIntroducedHeaders = true;
+        sawHouseHeaders = true;
+      }
+    }
+    if (rowIntroducedHeaders) continue;
+
+    for (let index = 0; index < cells.length - 1; index += 1) {
+      const grade = String(cells[index] || "").trim();
+      const name = String(cells[index + 1] || "").trim();
+      if (!name || !isLikelyGradeValue(grade)) continue;
+      let houseId = houseByColumn[index] || houseByColumn[index + 1] || "";
+      if (!houseId && headerColumns.length) {
+        let nearest = -1;
+        for (const column of headerColumns) {
+          if (column <= index && column > nearest) nearest = column;
+        }
+        if (nearest >= 0) houseId = houseByColumn[nearest] || "";
+      }
+      parsed.push({
+        name,
+        grade,
+        houseId,
+        houseRaw: houseId ? (HOUSE_TO_SHEET[houseId] || houseId) : ""
+      });
+      index += 1;
+    }
+  }
+
+  return sawHouseHeaders ? parsed : [];
+}
+
+function parseStudentRows(rows) {
+  const wideRosterParsed = parseWideHouseRosterRows(rows);
+  if (wideRosterParsed.length) return wideRosterParsed;
+  return rows.map(normalizeStudentRow).filter(Boolean);
+}
+
+function renderStudentSearch(list) {
+  if (!dom.studentSearchList) return;
+  if (!list.length) {
+    dom.studentSearchList.innerHTML = '<li class="log-empty">No results</li>';
+    return;
+  }
+  dom.studentSearchList.innerHTML = list.map(item => {
+    const houseName = item.houseId ? findHouseName(item.houseId) : "Unknown house";
+    const gradeLabel = item.grade ? `Grade ${escapeHtml(item.grade)}` : "Grade unknown";
+    return `
+      <li class="student-item">
+        <strong>${escapeHtml(item.name)}</strong>
+        <div class="student-meta">${gradeLabel} - ${escapeHtml(houseName)}</div>
+      </li>
+    `;
+  }).join("");
+}
+
+function filterStudents(queryText) {
+  const query = String(queryText || "").trim().toLowerCase();
+  if (!query) {
+    renderStudentSearch(currentStudents.slice(0, 12));
+    return;
+  }
+  const results = currentStudents.filter(item => item.nameLower.includes(query)).slice(0, 20);
+  renderStudentSearch(results);
+}
+
+async function loadStudents() {
+  setStudentStatus("Loading", "neutral");
+  try {
+    const result = await callSheetApi({
+      action: "getStudents",
+      spreadsheetId: SHEETS_SYNC.spreadsheetId,
+      tab: SHEETS_SYNC.studentsTab
+    });
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    const parsed = parseStudentRows(rows);
+    const missingHouse = parsed.filter(item => !item.houseId).length;
+    const missingGrade = parsed.filter(item => !item.grade).length;
+    currentStudents = parsed.map(item => ({
+      ...item,
+      nameLower: item.name.toLowerCase()
+    }));
+    const summaryParts = [`Loaded ${currentStudents.length}`];
+    if (missingHouse > 0) summaryParts.push(`${missingHouse} missing house`);
+    if (missingGrade > 0) summaryParts.push(`${missingGrade} missing grade`);
+    const summary = summaryParts.join(" - ");
+    setStudentStatus(summary, "live");
+    filterStudents(dom.studentSearchInput?.value || "");
+  } catch (error) {
+    const message = error?.message ? `Unable to load (${error.message})` : "Unable to load";
+    setStudentStatus(message, "warn");
+    renderStudentSearch([]);
+  }
 }
 
 function closeDrawer() {
@@ -406,7 +1075,13 @@ function renderNotificationList(notifications = []) {
   currentNotifications = notifications;
   const reviewRole = getNotificationReviewRole();
   currentNotificationReviewRole = reviewRole;
-  const visible = notifications.filter(notification => notification.status !== "deleted" && isNotificationForRole(notification, reviewRole));
+  const visible = notifications.filter(notification => {
+    if (notification.status === "deleted") return false;
+    if (!isNotificationForRole(notification, reviewRole)) return false;
+    const isSystem = String(notification.type || "").toLowerCase() === "system";
+    if (!showSystemAlerts && isSystem) return false;
+    return true;
+  });
 
   if (!dom.menuBadge) return;
   const count = visible.length;
@@ -427,13 +1102,18 @@ function renderNotificationList(notifications = []) {
     const targetRole = notification.targetRole && notification.targetRole !== "all"
       ? getRoleConfig(notification.targetRole).label
       : "All roles";
+    const isSystem = String(notification.type || "").toLowerCase() === "system";
+    const severity = String(notification.severity || "warn").toLowerCase();
+    const systemChip = isSystem
+      ? `<span class="notification-type-chip" data-severity="${escapeHtml(severity)}">System</span>`
+      : "";
 
     return `
       <li class="notification-item">
         <div class="notification-item-top">
           <div>
             <strong>${title}</strong>
-            <div class="notification-meta">${timestamp} · <span class="notification-review-role-chip">${escapeHtml(reviewRole === currentUserRole ? targetRole : `${targetRole} / as ${getRoleConfig(reviewRole).label}`)}</span></div>
+            <div class="notification-meta">${timestamp} - <span class="notification-review-role-chip">${escapeHtml(reviewRole === currentUserRole ? targetRole : `${targetRole} / as ${getRoleConfig(reviewRole).label}`)}</span> ${systemChip}</div>
           </div>
           ${canManageNotification(notification) ? `
           <div class="notification-actions">
@@ -445,7 +1125,10 @@ function renderNotificationList(notifications = []) {
     `;
   }).join("");
 
-  const bannerNotification = visible.find(notification => isNotificationForRole(notification, currentUserRole)) || visible[0] || null;
+  const bannerNotification = visible.find(notification => {
+    const isSystem = String(notification.type || "").toLowerCase() === "system";
+    return !isSystem && isNotificationForRole(notification, currentUserRole);
+  }) || visible.find(notification => String(notification.type || "").toLowerCase() !== "system") || null;
   renderNotificationBanner(bannerNotification);
 }
 
@@ -519,7 +1202,7 @@ function applyRoleUi(role) {
   }
 
   if (dom.loggedInAs) {
-    dom.loggedInAs.textContent = `${currentUserEmail} • ${config.label}`;
+    dom.loggedInAs.textContent = `${currentUserEmail} - ${config.label}`;
   }
 
   if (dom.menuBtn) dom.menuBtn.hidden = !hasRoleAtLeast(currentUserRole, "admin");
@@ -558,6 +1241,9 @@ function applyRoleUi(role) {
   if (dom.suggestionPanel) dom.suggestionPanel.hidden = !config.canSuggest;
   if (dom.userAdminPanel) dom.userAdminPanel.hidden = !config.canManageUsers;
   if (dom.suggestionReviewPanel) dom.suggestionReviewPanel.hidden = !hasRoleAtLeast(currentUserRole, "admin");
+  if (dom.startEventBtn) dom.startEventBtn.disabled = !hasRoleAtLeast(currentUserRole, "member");
+  if (dom.stopEventBtn) dom.stopEventBtn.disabled = !hasRoleAtLeast(currentUserRole, "member");
+  if (dom.eventBannerStop) dom.eventBannerStop.disabled = !hasRoleAtLeast(currentUserRole, "member");
 
   if (dom.notificationTargetRole) {
     [...dom.notificationTargetRole.options].forEach(option => {
@@ -654,12 +1340,20 @@ async function loadNotifications() {
 }
 
 async function fetchSheetLog() {
-  const result = await callSheetApi({
-    action: "getPoints",
-    spreadsheetId: SHEETS_SYNC.spreadsheetId,
-    tab: SHEETS_SYNC.logTab
-  });
-  return Array.isArray(result?.rows) ? result.rows : [];
+  try {
+    const result = await callSheetApi({
+      action: "getPoints",
+      spreadsheetId: SHEETS_SYNC.spreadsheetId,
+      tab: SHEETS_SYNC.logTab
+    });
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    cacheLog(rows);
+    return rows;
+  } catch (error) {
+    const cached = getCachedLog();
+    if (cached) return cached.rows;
+    throw error;
+  }
 }
 
 async function postNotification() {
@@ -1033,7 +1727,10 @@ function formatSheetDate(date = new Date()) {
 }
 
 function setSyncStatus(message, tone = "neutral") {
-  dom.syncStatus.textContent = message;
+  lastSyncStatus = { message, tone };
+  const pending = pendingWriteCount();
+  const suffix = pending > 0 ? ` - Pending: ${pending}` : "";
+  dom.syncStatus.textContent = `${message}${suffix}`;
   dom.syncStatus.dataset.tone = tone;
 }
 
@@ -1123,6 +1820,26 @@ function renderHistoryList(rows = currentPointRows) {
   updateRedoUndoButtons();
 }
 
+function applyOptimisticPointRow(row) {
+  if (!row) return;
+  currentPointRows = [...currentPointRows, row];
+  if (!currentScores) {
+    currentScores = aggregateScoresFromRows(currentPointRows);
+  } else {
+    const house = normalizeHouseFromSheet(row.House ?? row.house ?? row[0]);
+    const amount = parsePointAmount(row["Point Amount"] ?? row.pointAmount ?? row[1]);
+    if (house && Number.isFinite(amount)) {
+      currentScores = {
+        ...currentScores,
+        [house]: scoreNumber(currentScores, house) + amount
+      };
+    }
+  }
+  updateScoreUi(currentScores);
+  renderHistoryList(currentPointRows);
+  cachePoints(currentPointRows, currentScores);
+}
+
 function addLogEntry(entry) {
   activityLog.unshift(entry);
   if (activityLog.length > MAX_LOG_ENTRIES) activityLog.pop();
@@ -1152,20 +1869,143 @@ function updateScoreUi(values) {
 }
 
 function validateReason() {
-  const reason = (dom.pointReason?.value || "").trim();
-  if (!reason) {
+  const oneOffReason = (dom.pointReason?.value || "").trim();
+  const detail = (dom.longTermDetail?.value || "").trim();
+  const eventName = String(dom.longTermEventName?.value || "").trim();
+
+  if (currentMode === "longTerm") {
+    if (!eventName) {
+      showToast("Event name is required for long-term mode.", "warn");
+      dom.longTermEventName?.focus();
+      return null;
+    }
+    currentEventName = eventName;
+    if (!detail) return eventName.slice(0, 120);
+    return `${eventName} - ${detail}`.slice(0, 120);
+  }
+
+  if (!oneOffReason) {
     showToast("Reason is required for all point changes.", "warn");
     dom.pointReason?.focus();
     return null;
   }
-  return reason.slice(0, 120);
+  return oneOffReason.slice(0, 120);
 }
 
 function makeSyncId() {
   return crypto.randomUUID();
 }
 
-async function callSheetApi(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
+function cachePoints(rows, totals) {
+  if (!Array.isArray(rows) || !totals) return;
+  writeJsonStorage(STORAGE_KEYS.pointsCache, { rows, totals, cachedAt: Date.now() });
+}
+
+function cacheLog(rows) {
+  if (!Array.isArray(rows)) return;
+  const limited = rows.slice(-300);
+  writeJsonStorage(STORAGE_KEYS.logCache, { rows: limited, cachedAt: Date.now() });
+}
+
+function getCachedPoints() {
+  const cached = readJsonStorage(STORAGE_KEYS.pointsCache, null);
+  if (!cached?.rows || !cached?.totals) return null;
+  return cached;
+}
+
+function getCachedLog() {
+  const cached = readJsonStorage(STORAGE_KEYS.logCache, null);
+  if (!cached?.rows) return null;
+  return cached;
+}
+
+function enqueuePendingWrite(action, payload, errorMessage) {
+  const list = prunePendingWrites(getPendingWrites());
+  const entry = {
+    id: crypto.randomUUID(),
+    action,
+    payload,
+    createdAt: Date.now(),
+    attempts: 0,
+    nextRetryAt: Date.now(),
+    lastError: errorMessage || ""
+  };
+  list.push(entry);
+
+  if (list.length > QUEUE_CONFIG.maxItems) {
+    list.splice(0, list.length - QUEUE_CONFIG.maxItems);
+    void emitSystemAlert({
+      title: "Pending queue trimmed",
+      body: "Old pending writes were dropped to keep the queue size safe.",
+      severity: "warn",
+      source: "queue",
+      dedupeKey: "queue_trimmed"
+    });
+  }
+
+  savePendingWrites(list);
+  setSyncStatus("Offline - write queued", "warn");
+  return entry;
+}
+
+async function flushQueuedWrites(force = false) {
+  if (isOffline()) return;
+
+  const list = prunePendingWrites(getPendingWrites());
+  if (!list.length) return;
+
+  const now = Date.now();
+  const remaining = [];
+
+  for (const entry of list) {
+    if (!force && entry.nextRetryAt > now) {
+      remaining.push(entry);
+      continue;
+    }
+    try {
+      await callSheetApi(entry.payload);
+    } catch (error) {
+      const attempts = Number(entry.attempts || 0) + 1;
+      if (attempts >= QUEUE_CONFIG.maxAttempts) {
+        void emitSystemAlert({
+          title: "Pending write failed",
+          body: `Dropped queued write after ${attempts} attempts.`,
+          severity: "error",
+          source: "queue",
+          dedupeKey: "queue_drop"
+        });
+        continue;
+      }
+      remaining.push({
+        ...entry,
+        attempts,
+        lastError: String(error?.message || error),
+        nextRetryAt: now + backoffDelay(attempts)
+      });
+    }
+  }
+
+  savePendingWrites(remaining);
+  if (!remaining.length) {
+    setSyncStatus(`Live - Flushed ${list.length} queued writes`, "live");
+    try {
+      await refreshFromSheets();
+    } catch (error) {
+      console.error(error);
+    }
+  } else {
+    setSyncStatus("Queued writes pending", "warn");
+  }
+}
+
+function scheduleQueueFlush() {
+  if (queueFlushHandle) clearInterval(queueFlushHandle);
+  queueFlushHandle = setInterval(() => {
+    void flushQueuedWrites().catch(error => console.error(error));
+  }, 15000);
+}
+
+async function callSheetApiOnce(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
   if (!SHEETS_SYNC.endpointUrl || !SHEETS_SYNC.secureApiKey) {
     throw new Error("Google Sheets sync is not configured. Set endpointUrl + secureApiKey in control.js");
   }
@@ -1185,6 +2025,23 @@ async function callSheetApi(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
     return json;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function callSheetApi(payload, timeoutMs = SHEETS_SYNC.timeoutMs) {
+  return retryWithBackoff(() => callSheetApiOnce(payload, timeoutMs));
+}
+
+async function sendSheetWrite(payload, actionLabel) {
+  try {
+    await callSheetApi(payload);
+    return { ok: true, queued: false };
+  } catch (error) {
+    if (isRetryableError(error)) {
+      enqueuePendingWrite(actionLabel, payload, String(error?.message || error));
+      return { ok: false, queued: true };
+    }
+    throw error;
   }
 }
 
@@ -1209,13 +2066,24 @@ function aggregateScoresFromRows(rows) {
 }
 
 async function fetchSheetPoints() {
-  const result = await callSheetApi({
-    action: "getPoints",
-    spreadsheetId: SHEETS_SYNC.spreadsheetId,
-    tab: SHEETS_SYNC.pointsTab
-  });
-  const rows = Array.isArray(result?.rows) ? result.rows : [];
-  return { rows, totals: aggregateScoresFromRows(rows) };
+  try {
+    const result = await callSheetApi({
+      action: "getPoints",
+      spreadsheetId: SHEETS_SYNC.spreadsheetId,
+      tab: SHEETS_SYNC.pointsTab
+    });
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    const totals = aggregateScoresFromRows(rows);
+    cachePoints(rows, totals);
+    return { rows, totals, fromCache: false };
+  } catch (error) {
+    const cached = getCachedPoints();
+    if (cached) {
+      setSyncStatus("Offline - using cached scores", "warn");
+      return { rows: cached.rows, totals: cached.totals, fromCache: true };
+    }
+    throw error;
+  }
 }
 
 async function appendPointRow({ houseId, delta, reason, source }) {
@@ -1230,12 +2098,23 @@ async function appendPointRow({ houseId, delta, reason, source }) {
     User: currentUserEmail || "app"
   };
 
-  await callSheetApi({
+  const payload = {
     action: "appendPoint",
     spreadsheetId: SHEETS_SYNC.spreadsheetId,
     tab: SHEETS_SYNC.pointsTab,
     row
-  });
+  };
+
+  const result = await sendSheetWrite(payload, "appendPoint");
+  if (result.queued) {
+    void emitSystemAlert({
+      title: "Points write queued",
+      body: "A points change was queued and will sync when online.",
+      severity: "warn",
+      source: "sheets",
+      dedupeKey: "points_write_queued"
+    });
+  }
 
   await appendSyncLog({
     level: "INFO",
@@ -1243,12 +2122,20 @@ async function appendPointRow({ houseId, delta, reason, source }) {
     details: `${source}: ${row.House} ${delta > 0 ? "+" : ""}${delta} (${reason})`
   });
 
-  return row;
+  await appendEventLog({
+    house: houseId,
+    delta,
+    reason,
+    source,
+    queued: result.queued
+  });
+
+  return { row, queued: result.queued };
 }
 
 async function appendSyncLog({ level, eventType, details }) {
   try {
-    await callSheetApi({
+    await sendSheetWrite({
       action: "appendLog",
       spreadsheetId: SHEETS_SYNC.spreadsheetId,
       tab: SHEETS_SYNC.logTab,
@@ -1259,7 +2146,7 @@ async function appendSyncLog({ level, eventType, details }) {
         User: currentUserEmail || "system",
         Details: details
       }
-    }, 8000);
+    }, "appendLog");
   } catch (error) {
     console.warn("Sync log append failed", error);
   }
@@ -1317,7 +2204,11 @@ async function withWrite(task) {
   updateBusyState(1);
   try {
     const result = await task();
-    setSyncStatus(`Live • Last saved ${formatClock()}`, "live");
+    if (result?.queued) {
+      setSyncStatus("Offline - write queued", "warn");
+    } else {
+      setSyncStatus(`Live - Last saved ${formatClock()}`, "live");
+    }
     return { ok: true, value: result };
   } catch (error) {
     console.error(error);
@@ -1331,18 +2222,32 @@ async function withWrite(task) {
 }
 
 async function refreshFromSheets() {
-  const { rows, totals } = await fetchSheetPoints();
+  const { rows, totals, fromCache } = await fetchSheetPoints();
   currentPointRows = rows;
   currentScores = totals;
   updateScoreUi(currentScores);
   renderHistoryList(currentPointRows);
-  const logRows = await fetchSheetLog().catch(error => {
+  let logRows = [];
+  try {
+    logRows = await fetchSheetLog();
+  } catch (error) {
     console.error(error);
     setSyncStatus("Log tab unavailable.", "warn");
-    return [];
-  });
+    void emitSystemAlert({
+      title: "Log tab unavailable",
+      body: "The Log tab could not be loaded. Cached data may be shown.",
+      severity: "warn",
+      source: "sheets",
+      dedupeKey: "log_tab_unavailable"
+    });
+    logRows = getCachedLog()?.rows || [];
+  }
   renderSheetLog(logRows);
-  setSyncStatus(`Live • Updated ${formatClock()}`, "live");
+  if (fromCache) {
+    setSyncStatus(`Offline - Cached ${formatClock()}`, "warn");
+  } else {
+    setSyncStatus(`Live - Updated ${formatClock()}`, "live");
+  }
 }
 
 function requireRole(minimumRole, message) {
@@ -1358,16 +2263,24 @@ async function applyDelta(house, delta) {
   if (!reason) return;
 
   const write = await withWrite(async () => {
-    await appendPointRow({ houseId: house, delta, reason, source: "delta" });
+    const result = await appendPointRow({ houseId: house, delta, reason, source: "delta" });
+    if (result.queued) {
+      applyOptimisticPointRow(result.row);
+      return { queued: true };
+    }
     await refreshFromSheets();
     await backupToFirebase({
       scores: currentScores,
       summary: `${findHouseName(house)} ${delta > 0 ? "+" : ""}${delta} (${reason})`,
       actionMeta: { type: "delta", house, delta, reason }
     });
+    return { queued: false };
   });
 
   if (!write.ok) return;
+  if (write.value?.queued) {
+    showToast("Write queued and will sync when online.", "warn");
+  }
   addLogEntry({ time: formatClock(), desc: `${findHouseName(house)} ${delta > 0 ? "+" : ""}${delta} (${reason})` });
 }
 
@@ -1406,28 +2319,39 @@ async function applyPlaceAwards() {
   }
 
   const write = await withWrite(async () => {
+    let queued = false;
     for (const entry of placements) {
-      await appendPointRow({
+      const result = await appendPointRow({
         houseId: entry.house,
         delta: entry.points,
         reason: `${reason} (${entry.badge})`,
         source: "place_award"
       });
-    }
-    await refreshFromSheets();
-    await backupToFirebase({
-      scores: currentScores,
-      summary: `Place awards (${reason})`,
-      actionMeta: {
-        type: "place_awards",
-        reason,
-        changes: placements.map(entry => ({ house: entry.house, delta: entry.points, place: entry.badge }))
+      if (result.queued) {
+        queued = true;
+        applyOptimisticPointRow(result.row);
       }
-    });
+    }
+    if (!queued) {
+      await refreshFromSheets();
+      await backupToFirebase({
+        scores: currentScores,
+        summary: `Place awards (${reason})`,
+        actionMeta: {
+          type: "place_awards",
+          reason,
+          changes: placements.map(entry => ({ house: entry.house, delta: entry.points, place: entry.badge }))
+        }
+      });
+    }
     await appendSyncLog({ level: "INFO", eventType: "PLACE_AWARDS", details: `${currentUserRole}: ${reason}` });
+    return { queued };
   });
 
   if (!write.ok) return;
+  if (write.value?.queued) {
+    showToast("Some writes were queued and will sync when online.", "warn");
+  }
   clearPlaceSelections();
   showToast("Place awards applied.", "success");
 }
@@ -1458,30 +2382,41 @@ async function restoreHistoryIndex(index, reasonOverride = "", minimumRole = "ad
   if (!reason) return;
 
   const write = await withWrite(async () => {
+    let queued = false;
     const deltas = houses.map(house => ({
       house: house.id,
       delta: scoreNumber(target.scores, house.id) - scoreNumber(currentScores, house.id)
     })).filter(item => item.delta !== 0);
 
     for (const item of deltas) {
-      await appendPointRow({
+      const result = await appendPointRow({
         houseId: item.house,
         delta: item.delta,
         reason: `${reason} (restore #${target.id})`,
         source: "restore"
       });
+      if (result.queued) {
+        queued = true;
+        applyOptimisticPointRow(result.row);
+      }
     }
 
-    await refreshFromSheets();
-    await backupToFirebase({
-      scores: currentScores,
-      summary: `Restore #${target.id} (${reason})`,
-      actionMeta: { type: "restore", commitId: target.id, reason }
-    });
+    if (!queued) {
+      await refreshFromSheets();
+      await backupToFirebase({
+        scores: currentScores,
+        summary: `Restore #${target.id} (${reason})`,
+        actionMeta: { type: "restore", commitId: target.id, reason }
+      });
+    }
     await appendSyncLog({ level: "WARN", eventType: "UNDO_RESTORE", details: `#${target.id} by ${currentUserEmail}` });
+    return { queued };
   });
 
   if (!write.ok) return;
+  if (write.value?.queued) {
+    showToast("Restore queued and will sync when online.", "warn");
+  }
   showToast(`Restored using compensating rows for #${target.id}.`, "info");
 }
 
@@ -1493,26 +2428,37 @@ async function resetScores() {
   if (!confirmed) return;
 
   const write = await withWrite(async () => {
+    let queued = false;
     for (const house of houses) {
       const current = scoreNumber(currentScores, house.id);
       if (current !== 0) {
-        await appendPointRow({
+        const result = await appendPointRow({
           houseId: house.id,
           delta: -current,
           reason: `${reason} (reset)`,
           source: "reset"
         });
+        if (result.queued) {
+          queued = true;
+          applyOptimisticPointRow(result.row);
+        }
       }
     }
-    await refreshFromSheets();
-    await backupToFirebase({
-      scores: currentScores,
-      summary: `Reset all scores (${reason})`,
-      actionMeta: { type: "reset", reason }
-    });
+    if (!queued) {
+      await refreshFromSheets();
+      await backupToFirebase({
+        scores: currentScores,
+        summary: `Reset all scores (${reason})`,
+        actionMeta: { type: "reset", reason }
+      });
+    }
+    return { queued };
   });
 
   if (!write.ok) return;
+  if (write.value?.queued) {
+    showToast("Reset queued and will sync when online.", "warn");
+  }
   showToast("All scores reset to zero.", "warn");
 }
 
@@ -1583,27 +2529,36 @@ async function approveSuggestion(suggestion) {
   }
 
   const write = await withWrite(async () => {
-    await appendPointRow({ houseId: house, delta, reason, source: "suggestion_approval" });
+    const result = await appendPointRow({ houseId: house, delta, reason, source: "suggestion_approval" });
+    if (result.queued) {
+      applyOptimisticPointRow(result.row);
+    }
     await setDoc(doc(db, "suggestions", suggestion.id), {
       status: "approved",
       reviewedBy: currentUserEmail,
       reviewedByRole: currentUserRole,
       reviewedAt: serverTimestamp()
     }, { merge: true });
-    await refreshFromSheets();
-    await backupToFirebase({
-      scores: currentScores,
-      summary: `Approved suggestion for ${findHouseName(house)} (${reason})`,
-      actionMeta: { type: "suggestion_approve", suggestionId: suggestion.id, house, delta, reason }
-    });
+    if (!result.queued) {
+      await refreshFromSheets();
+      await backupToFirebase({
+        scores: currentScores,
+        summary: `Approved suggestion for ${findHouseName(house)} (${reason})`,
+        actionMeta: { type: "suggestion_approve", suggestionId: suggestion.id, house, delta, reason }
+      });
+    }
     await appendSyncLog({
       level: "INFO",
       eventType: "SUGGESTION_APPROVED",
       details: `${suggestion.authorEmail || "unknown"}: ${findHouseName(house)} ${delta > 0 ? "+" : ""}${delta}`
     });
+    return { queued: result.queued };
   });
 
   if (!write.ok) return;
+  if (write.value?.queued) {
+    showToast("Approval queued and will sync when online.", "warn");
+  }
   showToast("Suggestion approved.", "success");
 }
 
@@ -1687,14 +2642,32 @@ async function submitSuggestion() {
   }
 }
 
-function startSheetPolling() {
-  if (sheetPollHandle) clearInterval(sheetPollHandle);
-  sheetPollHandle = setInterval(() => {
-    void refreshFromSheets().catch(error => {
+function scheduleNextPoll(delayMs) {
+  if (sheetPollHandle) clearTimeout(sheetPollHandle);
+  sheetPollHandle = setTimeout(async () => {
+    try {
+      await refreshFromSheets();
+      pollFailureCount = 0;
+      scheduleNextPoll(SHEETS_SYNC.pollIntervalMs);
+    } catch (error) {
       console.error(error);
+      pollFailureCount += 1;
+      const backoff = Math.min(SHEETS_SYNC.pollIntervalMs * Math.pow(2, pollFailureCount), 60000);
       setSyncStatus("Disconnected from Google Sheets sync.", "warn");
-    });
-  }, SHEETS_SYNC.pollIntervalMs);
+      void emitSystemAlert({
+        title: "Sheets sync delayed",
+        body: "Live sync failed and will retry with backoff.",
+        severity: "warn",
+        source: "sheets",
+        dedupeKey: "sheets_sync_backoff"
+      });
+      scheduleNextPoll(backoff);
+    }
+  }, delayMs);
+}
+
+function startSheetPolling() {
+  scheduleNextPoll(SHEETS_SYNC.pollIntervalMs);
 }
 
 onSnapshot(
@@ -1713,12 +2686,57 @@ onSnapshot(
   }
 );
 
+onSnapshot(
+  eventDoc,
+  snapshot => {
+    const data = snapshot.exists() ? snapshot.data() : {};
+    applyEventState({
+      active: Boolean(data?.active),
+      name: String(data?.name || "").trim(),
+      startedBy: data?.startedBy || ""
+    });
+  },
+  error => {
+    console.error(error);
+  }
+);
+
 if (dom.menuBtn) {
   dom.menuBtn.addEventListener("click", toggleDrawer);
 }
+if (dom.toolsMenuBtn) {
+  dom.toolsMenuBtn.addEventListener("click", toggleToolsDrawer);
+}
+
+dom.modeSwitch?.addEventListener("click", event => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".mode-pill");
+  if (!button) return;
+  const mode = button.getAttribute("data-mode") || "oneOff";
+  applyModeSelection(mode);
+});
+
+dom.changeModeBtn?.addEventListener("click", () => {
+  dom.modeSwitchPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  closeDrawer();
+});
+dom.retryQueueBtn?.addEventListener("click", () => {
+  void flushQueuedWrites(true);
+});
+dom.systemAlertsToggle?.addEventListener("change", () => {
+  showSystemAlerts = Boolean(dom.systemAlertsToggle?.checked);
+  writeStoredBoolean(STORAGE_KEYS.showSystemAlerts, showSystemAlerts);
+  renderNotificationList(currentNotifications);
+});
+dom.startEventBtn?.addEventListener("click", () => { void startEvent(); });
+dom.stopEventBtn?.addEventListener("click", () => { void stopEvent(); });
+dom.eventBannerStop?.addEventListener("click", () => { void stopEvent(); });
 
 if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener("click", closeDrawer);
 if (dom.drawerOverlay) dom.drawerOverlay.addEventListener("click", closeDrawer);
+if (dom.closeToolsDrawerBtn) dom.closeToolsDrawerBtn.addEventListener("click", closeToolsDrawer);
+if (dom.toolsDrawerOverlay) dom.toolsDrawerOverlay.addEventListener("click", closeToolsDrawer);
 if (dom.jumpNotificationsBtn) dom.jumpNotificationsBtn.addEventListener("click", () => {
   closeDrawer();
   dom.notificationForm?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1729,7 +2747,24 @@ if (dom.jumpUsersBtn) dom.jumpUsersBtn.addEventListener("click", () => {
 });
 if (dom.jumpHistoryBtn) dom.jumpHistoryBtn.addEventListener("click", () => {
   closeDrawer();
+  openToolsDrawer();
   dom.historyList?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+if (dom.jumpStudentsBtn) dom.jumpStudentsBtn.addEventListener("click", () => {
+  closeToolsDrawer();
+  dom.studentSearchInput?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+if (dom.jumpEventLogBtn) dom.jumpEventLogBtn.addEventListener("click", () => {
+  closeToolsDrawer();
+  dom.eventLogList?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+if (dom.jumpHistoryLogBtn) dom.jumpHistoryLogBtn.addEventListener("click", () => {
+  closeToolsDrawer();
+  dom.historyList?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+if (dom.jumpSheetLogBtn) dom.jumpSheetLogBtn.addEventListener("click", () => {
+  closeToolsDrawer();
+  dom.sheetLogList?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 dom.loginForm.addEventListener("submit", async event => {
@@ -1827,6 +2862,14 @@ if (dom.suggestionReason) {
   });
 }
 
+if (dom.studentSearchInput) {
+  dom.studentSearchInput.addEventListener("input", event => {
+    const value = event.target instanceof HTMLInputElement ? event.target.value : "";
+    filterStudents(value);
+  });
+}
+dom.studentRefreshBtn?.addEventListener("click", () => { void loadStudents(); });
+
 dom.checkpointName.addEventListener("keydown", event => {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -1849,7 +2892,9 @@ onAuthStateChanged(auth, async user => {
     dom.loginBox.style.display = "grid";
     dom.mainPanel.style.display = "none";
     dom.passwordInput.value = "";
-    if (sheetPollHandle) clearInterval(sheetPollHandle);
+    closeToolsDrawer();
+    if (sheetPollHandle) clearTimeout(sheetPollHandle);
+    if (queueFlushHandle) clearInterval(queueFlushHandle);
     if (usersUnsubscribe) {
       usersUnsubscribe();
       usersUnsubscribe = null;
@@ -1862,6 +2907,7 @@ onAuthStateChanged(auth, async user => {
       suggestionsUnsubscribe();
       suggestionsUnsubscribe = null;
     }
+    clearEventLogs();
     return;
   }
 
@@ -1874,14 +2920,20 @@ onAuthStateChanged(auth, async user => {
 
   setAuthError("");
   dom.loginBox.style.display = "none";
-  dom.mainPanel.style.display = "block";
+  dom.mainPanel.style.display = "none";
   currentUserEmail = user.email || "";
   applyRoleUi(resolvedRole);
+  updateSystemAlertsToggle();
+  ensureModeSwitch();
+  dom.mainPanel.style.display = "block";
+  scheduleQueueFlush();
+  void flushQueuedWrites();
 
   try {
     await refreshFromSheets();
     startSheetPolling();
     await appendSyncLog({ level: "INFO", eventType: "SESSION_START", details: "Control panel signed in" });
+    await loadStudents();
     await loadNotifications();
     await loadSuggestions();
     await loadUserDirectory();
@@ -1897,4 +2949,13 @@ window.addEventListener("beforeunload", event => {
   if (!shouldWarnBeforeLeave || dom.mainPanel.style.display !== "block") return;
   event.preventDefault();
   event.returnValue = "";
+});
+
+window.addEventListener("online", () => {
+  setSyncStatus("Online - syncing queued writes", "live");
+  void flushQueuedWrites(true);
+});
+
+window.addEventListener("offline", () => {
+  setSyncStatus("Offline - writes will queue", "warn");
 });
