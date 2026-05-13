@@ -713,6 +713,26 @@ function setStudentStatus(message, tone = "neutral") {
   if (!dom.studentSearchStatus) return;
   dom.studentSearchStatus.textContent = message;
   dom.studentSearchStatus.dataset.tone = tone;
+
+  // Also surface the student status on the Tools menu so it's visible when the
+  // drawer is closed. Don't override a numeric menu badge (used elsewhere).
+  try {
+    if (dom.toolsMenuBtn) dom.toolsMenuBtn.hidden = false;
+    if (dom.menuBadge) {
+      const existing = String(dom.menuBadge.textContent || "").trim();
+      const hasDigits = /\d/.test(existing);
+      if (!hasDigits) {
+        if (tone === "live") dom.menuBadge.textContent = "";
+        else if (tone === "warn") dom.menuBadge.textContent = "!";
+        else if (/load/i.test(message)) dom.menuBadge.textContent = "…";
+        else dom.menuBadge.textContent = "";
+      }
+      dom.menuBadge.title = message;
+      dom.menuBadge.hidden = false;
+    }
+  } catch (e) {
+    /* best-effort UI hint; ignore errors */
+  }
 }
 
 function closeToolsDrawer() {
@@ -800,6 +820,50 @@ function normalizeStudentRowsPayload(rows) {
   }
   if (rows && typeof rows === "object") return [rows];
   return [];
+}
+
+function parseGroupedStudentExportRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  if (!rows.every(row => row && !Array.isArray(row) && typeof row === "object" && "Student" in row && "House" in row)) {
+    return [];
+  }
+
+  const houseOrder = [];
+  const buckets = new Map();
+
+  for (const row of rows) {
+    const houseRaw = String(row.House || "").trim();
+    const houseId = normalizeHouseFromSheet(houseRaw) || "";
+    if (!houseId) continue;
+
+    if (!buckets.has(houseId)) {
+      buckets.set(houseId, { houseRaw: HOUSE_TO_SHEET[houseId] || houseRaw, grades: [], names: [] });
+      houseOrder.push(houseId);
+    }
+
+    const bucket = buckets.get(houseId);
+    const student = String(row.Student || "").trim();
+    if (!student) continue;
+
+    if (isLikelyGradeValue(student)) bucket.grades.push(student);
+    else bucket.names.push(student);
+  }
+
+  const parsed = [];
+  for (const houseId of houseOrder) {
+    const bucket = buckets.get(houseId);
+    const pairCount = Math.min(bucket.grades.length, bucket.names.length);
+    for (let index = 0; index < pairCount; index += 1) {
+      parsed.push({
+        name: bucket.names[index],
+        grade: bucket.grades[index],
+        houseId,
+        houseRaw: bucket.houseRaw
+      });
+    }
+  }
+
+  return parsed;
 }
 
 function isLikelyGradeValue(raw) {
@@ -930,6 +994,10 @@ function parseWideHouseRosterRows(rows) {
 function parseStudentRows(rows) {
   const normalizedRows = normalizeStudentRowsPayload(rows);
   if (!normalizedRows.length) return [];
+
+  const groupedExportParsed = parseGroupedStudentExportRows(normalizedRows);
+  if (groupedExportParsed.length) return groupedExportParsed;
+
   const wideRosterParsed = parseWideHouseRosterRows(normalizedRows);
   if (wideRosterParsed.length) return wideRosterParsed;
   return normalizedRows.map(normalizeStudentRow).filter(Boolean);
